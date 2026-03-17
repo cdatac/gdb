@@ -1,24 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-"""
-Gökdemir Barometresi - TÜİK veri çekici
-
-Amaç:
-- TÜİK veri portalındaki kırılgan search/discovery adımını tamamen kaldırmak
-- Doğrudan bilinen metadata / press URL'lerinden veri çekmek
-- Önce requests ile denemek, yetmezse Scrapling browser fallback kullanmak
-- Sayfadan tablo / script içeriği / JSON-LD yakalamak
-- Standart bir ara çıktı üretmek: data/tuik_families.json
-
-Beklenen kullanım:
-    python src/scrape_tuik.py
-
-Çevresel değişkenler:
-    TUIK_TIMEOUT=60
-    TUIK_DEBUG=1
-"""
-
 from __future__ import annotations
 
 import json
@@ -34,7 +16,6 @@ from typing import Any, Dict, List, Optional, Tuple
 import requests
 from bs4 import BeautifulSoup
 
-# Scrapling opsiyonel; yoksa sadece requests ile devam eder
 try:
     from scrapling.fetchers import DynamicFetcher
     HAS_SCRAPLING = True
@@ -67,20 +48,6 @@ HEADERS = {
     "Pragma": "no-cache",
 }
 
-
-# -------------------------------------------------------------------
-# CONFIG
-# -------------------------------------------------------------------
-# Burada search URL YOK.
-# Her aile için doğrudan açılabilir URL ver.
-#
-# Şimdilik örnekler:
-# - TÜFE için metadata sayfası daha stabil olabilir.
-# - Gerekirse press URL de kullanılabilir.
-#
-# Not:
-#   url alanlarını sen kendi test edip doğruladığın gerçek URL'lerle değiştir.
-#   Kod discovery yapmadığı için timeout kaynağı olan /tr/search'e gitmez.
 PRESS_SPECS: List[Dict[str, Any]] = [
     {
         "key": "tuik_tufe",
@@ -88,42 +55,32 @@ PRESS_SPECS: List[Dict[str, Any]] = [
         "category": "Makro",
         "source": "TÜİK",
         "url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-        "must_contain_any": [
-            "Tüketici Fiyat Endeksi",
-            "TÜFE",
-        ],
+        "must_contain_any": ["Tüketici Fiyat Endeksi", "TÜFE"],
         "group_rules": [
-            # Örnek eşleme. İleride senin skor modeline göre genişletilir.
             {"match": ["gıda", "alkolsüz içecekler"], "group": "Gıda ve alkolsüz içecekler"},
-            {"match": ["ulaştırma"], "group": "Ulaştırma"},
-            {"match": ["konut"], "group": "Konut"},
-            {"match": ["lokanta", "oteller"], "group": "Lokanta ve oteller"},
-            {"match": ["çeşitli mal", "hizmet"], "group": "Çeşitli mal ve hizmetler"},
-            {"match": ["eğitim"], "group": "Eğitim"},
-            {"match": ["sağlık"], "group": "Sağlık"},
+            {"match": ["alkollü içecekler", "tütün"], "group": "Alkollü içecekler ve tütün"},
             {"match": ["giyim", "ayakkabı"], "group": "Giyim ve ayakkabı"},
+            {"match": ["konut"], "group": "Konut"},
             {"match": ["ev eşyası"], "group": "Ev eşyası"},
+            {"match": ["sağlık"], "group": "Sağlık"},
+            {"match": ["ulaştırma"], "group": "Ulaştırma"},
             {"match": ["haberleşme"], "group": "Haberleşme"},
             {"match": ["eğlence", "kültür"], "group": "Eğlence ve kültür"},
-            {"match": ["alkollü içecekler", "tütün"], "group": "Alkollü içecekler ve tütün"},
+            {"match": ["eğitim"], "group": "Eğitim"},
+            {"match": ["lokanta", "oteller"], "group": "Lokanta ve oteller"},
+            {"match": ["çeşitli mal", "hizmet"], "group": "Çeşitli mal ve hizmetler"},
         ],
     },
-    # Buraya yeni aileler ekle:
-    # {
-    #     "key": "tuik_yiufe",
-    #     "title": "Yurt İçi Üretici Fiyat Endeksi",
-    #     "category": "Makro",
-    #     "source": "TÜİK",
-    #     "url": "https://veriportali.tuik.gov.tr/tr/press/XXXXX/metadata",
-    #     "must_contain_any": ["Yurt İçi Üretici Fiyat Endeksi", "Yİ-ÜFE"],
-    #     "group_rules": [...]
-    # },
 ]
 
 
-# -------------------------------------------------------------------
-# MODELS
-# -------------------------------------------------------------------
+@dataclass
+class HistoryPoint:
+    period: str
+    value: Optional[float]
+    raw_value: str
+
+
 @dataclass
 class RowRecord:
     family_key: str
@@ -135,12 +92,10 @@ class RowRecord:
     date_text: Optional[str] = None
     group: Optional[str] = None
     sub_group: Optional[str] = None
+    history: Optional[List[Dict[str, Any]]] = None
     meta: Optional[Dict[str, Any]] = None
 
 
-# -------------------------------------------------------------------
-# UTILS
-# -------------------------------------------------------------------
 def log(*args: Any) -> None:
     print(*args, flush=True)
 
@@ -160,13 +115,6 @@ def save_json(path: Path, obj: Any) -> None:
     path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def slugify(text: str) -> str:
-    text = text.lower().strip()
-    text = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE)
-    text = re.sub(r"[\s_-]+", "_", text)
-    return text.strip("_")
-
-
 def normalize_spaces(text: str) -> str:
     return re.sub(r"\s+", " ", (text or "")).strip()
 
@@ -175,8 +123,7 @@ def normalize_tr(text: str) -> str:
     text = (text or "").strip().lower()
     rep = str.maketrans("çğıöşüİI", "cgiosuii")
     text = text.translate(rep)
-    text = normalize_spaces(text)
-    return text
+    return normalize_spaces(text)
 
 
 def parse_float_maybe(text: str) -> Optional[float]:
@@ -186,25 +133,17 @@ def parse_float_maybe(text: str) -> Optional[float]:
     if not s:
         return None
 
-    # yüzde, puan, sayı vb. ayıklamaya çalış
-    s = s.replace("%", "").replace("−", "-").replace("–", "-")
-    s = s.replace("\xa0", " ")
+    s = s.replace("%", "").replace("−", "-").replace("–", "-").replace("\xa0", " ")
 
-    # Türkçe sayı formatı: 1.234,56
-    # Önce saf sayı/desen çıkar
     m = re.search(r"[-+]?\d[\d\.\,]*", s)
     if not m:
         return None
 
     num = m.group(0)
-
-    # hem . hem , varsa Türkçe kabul et
     if "." in num and "," in num:
         num = num.replace(".", "").replace(",", ".")
-    # sadece , varsa ondalık kabul et
     elif "," in num and "." not in num:
         num = num.replace(",", ".")
-    # sadece . varsa bırak
     try:
         return float(num)
     except Exception:
@@ -222,9 +161,15 @@ def detect_unit(text: str) -> Optional[str]:
     return None
 
 
-# -------------------------------------------------------------------
-# FETCH
-# -------------------------------------------------------------------
+def infer_group(label: str, group_rules: List[Dict[str, Any]]) -> Optional[str]:
+    nl = normalize_tr(label)
+    for rule in group_rules:
+        tokens = [normalize_tr(x) for x in rule.get("match", [])]
+        if all(tok in nl for tok in tokens):
+            return rule["group"]
+    return None
+
+
 def fetch_with_requests(url: str) -> Tuple[Optional[str], Dict[str, Any]]:
     meta: Dict[str, Any] = {"method": "requests", "ok": False, "url": url}
     try:
@@ -289,9 +234,6 @@ def fetch_html(url: str, key: str) -> Tuple[Optional[str], Dict[str, Any]]:
     }
 
 
-# -------------------------------------------------------------------
-# PARSE
-# -------------------------------------------------------------------
 def extract_json_ld(soup: BeautifulSoup) -> List[Dict[str, Any]]:
     items: List[Dict[str, Any]] = []
     for tag in soup.find_all("script", attrs={"type": "application/ld+json"}):
@@ -310,9 +252,6 @@ def extract_json_ld(soup: BeautifulSoup) -> List[Dict[str, Any]]:
 
 
 def extract_candidate_tables(soup: BeautifulSoup) -> List[List[List[str]]]:
-    """
-    HTML tablolarını 2D string array'e çevirir.
-    """
     tables: List[List[List[str]]] = []
     for table in soup.find_all("table"):
         rows: List[List[str]] = []
@@ -336,20 +275,49 @@ def extract_script_blobs(soup: BeautifulSoup) -> List[str]:
     return blobs
 
 
+def extract_periods_from_header(header_cells: List[str]) -> List[Optional[str]]:
+    periods: List[Optional[str]] = []
+    for cell in header_cells:
+        cell = normalize_spaces(cell)
+        if re.search(r"(20\d{2}[-/\.]?(0[1-9]|1[0-2]))", cell):
+            m = re.search(r"(20\d{2})[-/\.]?(0[1-9]|1[0-2])", cell)
+            if m:
+                periods.append(f"{m.group(1)}-{m.group(2)}")
+                continue
+        if re.search(r"(ocak|şubat|mart|nisan|mayıs|haziran|temmuz|ağustos|eylül|ekim|kasım|aralık)", cell.lower()):
+            periods.append(cell)
+            continue
+        periods.append(None)
+    return periods
+
+
+def build_history_from_row(row: List[str], periods: List[Optional[str]]) -> List[Dict[str, Any]]:
+    hist: List[Dict[str, Any]] = []
+    for idx, period in enumerate(periods):
+        if idx >= len(row):
+            break
+        if not period:
+            continue
+        raw_val = row[idx]
+        value = parse_float_maybe(raw_val)
+        hist.append(asdict(HistoryPoint(period=period, value=value, raw_value=raw_val)))
+    return hist
+
+
 def table_to_records(
     table: List[List[str]],
     family_key: str,
     family_title: str,
     group_rules: List[Dict[str, Any]],
 ) -> List[RowRecord]:
-    """
-    Basit heuristik:
-    - ilk sütun etiket
-    - diğer sütunlarda ilk parse edilebilen numerik değeri al
-    """
     out: List[RowRecord] = []
+    if not table:
+        return out
 
-    for row in table:
+    header = table[0]
+    header_periods = extract_periods_from_header(header)
+
+    for row in table[1:]:
         if len(row) < 2:
             continue
 
@@ -357,7 +325,6 @@ def table_to_records(
         if not label:
             continue
 
-        # header satırlarını ele
         if label.lower() in {"madde", "grup", "alt grup", "ana harcama grubu", "açıklama"}:
             continue
 
@@ -374,6 +341,7 @@ def table_to_records(
             continue
 
         group = infer_group(label, group_rules)
+        history = build_history_from_row(row, header_periods) if any(header_periods) else []
 
         out.append(
             RowRecord(
@@ -386,77 +354,12 @@ def table_to_records(
                 date_text=None,
                 group=group,
                 sub_group=label if group and group != label else None,
+                history=history,
                 meta={"source": "html_table"},
             )
         )
 
     return out
-
-
-def infer_group(label: str, group_rules: List[Dict[str, Any]]) -> Optional[str]:
-    nl = normalize_tr(label)
-    for rule in group_rules:
-        tokens = [normalize_tr(x) for x in rule.get("match", [])]
-        if all(tok in nl for tok in tokens):
-            return rule["group"]
-    return None
-
-
-def extract_records_from_html(spec: Dict[str, Any], html: str) -> Tuple[List[RowRecord], Dict[str, Any]]:
-    soup = BeautifulSoup(html, "html.parser")
-
-    page_text = normalize_spaces(soup.get_text(" ", strip=True))
-    page_title = normalize_spaces(soup.title.get_text(" ", strip=True)) if soup.title else ""
-
-    tables = extract_candidate_tables(soup)
-    json_ld = extract_json_ld(soup)
-    script_blobs = extract_script_blobs(soup)
-
-    parse_meta: Dict[str, Any] = {
-        "page_title": page_title,
-        "text_length": len(page_text),
-        "table_count": len(tables),
-        "json_ld_count": len(json_ld),
-        "script_blob_count": len(script_blobs),
-    }
-
-    # İçerik doğrulama
-    must = spec.get("must_contain_any") or []
-    if must and not any(m.lower() in page_text.lower() for m in must):
-        parse_meta["must_contain_warning"] = {
-            "expected_any": must,
-            "sample_title": page_title,
-        }
-
-    all_records: List[RowRecord] = []
-
-    # 1) Önce gerçek HTML tablo dene
-    for table in tables:
-        recs = table_to_records(table, spec["key"], spec["title"], spec.get("group_rules", []))
-        if recs:
-            all_records.extend(recs)
-
-    # 2) Tablodan bir şey çıkmadıysa script blob içinden label:value benzeri desen avla
-    if not all_records:
-        all_records.extend(
-            heuristic_extract_from_scripts(
-                family_key=spec["key"],
-                family_title=spec["title"],
-                group_rules=spec.get("group_rules", []),
-                script_blobs=script_blobs,
-            )
-        )
-
-    # Tekilleştirme
-    uniq: Dict[Tuple[str, Optional[str], Optional[float]], RowRecord] = {}
-    for r in all_records:
-        k = (r.row_label, r.group, r.value)
-        uniq[k] = r
-
-    final_records = list(uniq.values())
-    parse_meta["record_count"] = len(final_records)
-
-    return final_records, parse_meta
 
 
 def heuristic_extract_from_scripts(
@@ -465,12 +368,6 @@ def heuristic_extract_from_scripts(
     group_rules: List[Dict[str, Any]],
     script_blobs: List[str],
 ) -> List[RowRecord]:
-    """
-    Çok kaba ama debug aşamasında faydalı fallback.
-    Script içinde:
-      "label":"Ulaştırma", "value":"123,45"
-    benzeri pattern'leri arar.
-    """
     out: List[RowRecord] = []
 
     label_patterns = [
@@ -478,11 +375,6 @@ def heuristic_extract_from_scripts(
         r'"name"\s*:\s*"([^"]+)"',
         r'"group"\s*:\s*"([^"]+)"',
         r'"title"\s*:\s*"([^"]+)"',
-    ]
-    value_patterns = [
-        r'"value"\s*:\s*"?(?:-?\d[\d\.,]*)"?',
-        r'"y"\s*:\s*"?(?:-?\d[\d\.,]*)"?',
-        r'"amount"\s*:\s*"?(?:-?\d[\d\.,]*)"?',
     ]
 
     for blob in script_blobs:
@@ -492,14 +384,7 @@ def heuristic_extract_from_scripts(
         for pat in label_patterns:
             labels.extend(re.findall(pat, blob, flags=re.IGNORECASE))
 
-        for pat in value_patterns:
-            vals = re.findall(pat, blob, flags=re.IGNORECASE)
-            if vals:
-                values.extend(vals)
-
-        # Yukarıdaki value regex'i tam grup döndürmüyorsa ikinci bir genel tarama yap
-        if not values:
-            values.extend(re.findall(r'"(?:value|y|amount)"\s*:\s*"([^"]+)"', blob, flags=re.IGNORECASE))
+        values.extend(re.findall(r'"(?:value|y|amount)"\s*:\s*"([^"]+)"', blob, flags=re.IGNORECASE))
 
         pairs = min(len(labels), len(values))
         for i in range(pairs):
@@ -520,6 +405,7 @@ def heuristic_extract_from_scripts(
                     unit=detect_unit(raw_value),
                     group=group,
                     sub_group=label if group and group != label else None,
+                    history=[],
                     meta={"source": "script_heuristic"},
                 )
             )
@@ -527,9 +413,57 @@ def heuristic_extract_from_scripts(
     return out
 
 
-# -------------------------------------------------------------------
-# MAIN
-# -------------------------------------------------------------------
+def extract_records_from_html(spec: Dict[str, Any], html: str) -> Tuple[List[RowRecord], Dict[str, Any]]:
+    soup = BeautifulSoup(html, "html.parser")
+
+    page_text = normalize_spaces(soup.get_text(" ", strip=True))
+    page_title = normalize_spaces(soup.title.get_text(" ", strip=True)) if soup.title else ""
+
+    tables = extract_candidate_tables(soup)
+    json_ld = extract_json_ld(soup)
+    script_blobs = extract_script_blobs(soup)
+
+    parse_meta: Dict[str, Any] = {
+        "page_title": page_title,
+        "text_length": len(page_text),
+        "table_count": len(tables),
+        "json_ld_count": len(json_ld),
+        "script_blob_count": len(script_blobs),
+    }
+
+    must = spec.get("must_contain_any") or []
+    if must and not any(m.lower() in page_text.lower() for m in must):
+        parse_meta["must_contain_warning"] = {"expected_any": must, "sample_title": page_title}
+
+    all_records: List[RowRecord] = []
+
+    for table in tables:
+        recs = table_to_records(table, spec["key"], spec["title"], spec.get("group_rules", []))
+        if recs:
+            all_records.extend(recs)
+
+    if not all_records:
+        all_records.extend(
+            heuristic_extract_from_scripts(
+                family_key=spec["key"],
+                family_title=spec["title"],
+                group_rules=spec.get("group_rules", []),
+                script_blobs=script_blobs,
+            )
+        )
+
+    uniq: Dict[Tuple[str, Optional[str], Optional[float]], RowRecord] = {}
+    for r in all_records:
+        k = (r.row_label, r.group, r.value)
+        uniq[k] = r
+
+    final_records = list(uniq.values())
+    parse_meta["record_count"] = len(final_records)
+    parse_meta["history_record_count"] = sum(1 for r in final_records if r.history)
+
+    return final_records, parse_meta
+
+
 def scrape_family(spec: Dict[str, Any]) -> Dict[str, Any]:
     key = spec["key"]
     url = spec["url"]
@@ -553,7 +487,6 @@ def scrape_family(spec: Dict[str, Any]) -> Dict[str, Any]:
 
     records, parse_meta = extract_records_from_html(spec, html)
 
-    # Group özet üret
     grouped: Dict[str, List[RowRecord]] = {}
     for r in records:
         g = r.group or "Diğer"
@@ -640,7 +573,6 @@ def main() -> None:
     log(f"[INFO] wrote: {OUT_FILE}")
     log(f"[INFO] ok_family_count={output['ok_family_count']} failed_family_count={output['failed_family_count']}")
 
-    # Hiç veri yoksa hard-fail etsin ki sessiz bozulma olmasın
     total_records = sum(x.get("record_count", 0) for x in results if isinstance(x, dict))
     if total_records == 0:
         log("[ERROR] total_records=0 ; scraper no usable data produced")

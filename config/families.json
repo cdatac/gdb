@@ -1,0 +1,12 @@
+{
+  "families": [
+    {
+      "family": "tuik_tufe",
+      "label": "TÜFE Ana Gruplar",
+      "discover_url": "https://veriportali.tuik.gov.tr/tr/category/6",
+      "must_contain": "Tüketici Fiyat Endeksi",
+      "fallback_url": null,
+      "notes": "Aylık TÜFE ana grup kırılımları. Kategori 6 = fiyat istatistikleri."
+    }
+  ]
+}

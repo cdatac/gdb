@@ -122,34 +122,19 @@ h1{
   border-radius:999px;
 }
 
-/* RENK SKALASI */
+.blue{background:linear-gradient(90deg,#60a5fa,#2563eb)}
+.green{background:linear-gradient(90deg,#4ade80,#16a34a)}
+.yellow{background:linear-gradient(90deg,#fde047,#facc15)}
+.orange{background:linear-gradient(90deg,#fb923c,#f97316)}
+.red{background:linear-gradient(90deg,#fb7185,#ef4444)}
 
-.blue{
-  background:linear-gradient(90deg,#60a5fa,#2563eb);
-}
+.children{display:none}
+.children.open{display:block}
 
-.green{
-  background:linear-gradient(90deg,#4ade80,#16a34a);
-}
-
-.yellow{
-  background:linear-gradient(90deg,#fde047,#facc15);
-}
-
-.orange{
-  background:linear-gradient(90deg,#fb923c,#f97316);
-}
-
-.red{
-  background:linear-gradient(90deg,#fb7185,#ef4444);
-}
-
-.children{
-  display:none;
-}
-
-.children.open{
-  display:block;
+.empty-state{
+  text-align:center;
+  padding:40px;
+  color:var(--muted);
 }
 
 table{
@@ -183,14 +168,11 @@ th,td{
 <h1>Gökdemir Barometresi</h1>
 <div class="sub">Ana sektöre tıklayınca alt sektörler açılır</div>
 
-<div class="meta" id="meta"></div>
+<div class="meta" id="meta">Yükleniyor...</div>
 
 <div class="card">
-
 <div class="top3" id="top3"></div>
-
 <div id="groups"></div>
-
 </div>
 
 <div class="card">
@@ -209,34 +191,25 @@ th,td{
 
 <div class="card method">
 <h3>Metodoloji</h3>
-
 <p>
-Gökdemir Barometresi, sektör ve alt sektör bazında fiyat baskısını ve potansiyel rekabet risklerini
-görselleştirmek amacıyla geliştirilmiş deneysel bir göstergedir.
+Gökdemir Barometresi, sektör bazında fiyat baskısını ve potansiyel rekabet risklerini
+görselleştirmek amacıyla geliştirilmiş deneysel bir göstergedir. Kaynak: TÜİK TÜFE verisi.
 </p>
-
 <p>
-Bu sürümde skorlar, alt sektörlerin göreli fiyat baskısını temsil eden normalize edilmiş değerlerden
-türetilmektedir. Ana sektör skoru, ilgili alt sektörlerin ortalamasıdır.
+Bileşik skor beş alt metrikten oluşur: mevcut seviye, trend (yön), ivme (hızlanma),
+oynaklık (volatilite) ve kalıcılık (persistence). Her biri 0-100 bandına normalize edilir
+ve ağırlıklı olarak birleştirilir.
 </p>
-
 <p>
-Nihai hedef, bu skorların TÜİK fiyat verileri ile genel enflasyon arasındaki fark (gap),
-zaman içindeki kalıcılık ve makro sinyaller kullanılarak otomatik hesaplanmasıdır.
+Renk skalası:<br>
+0–39 → düşük risk (mavi)<br>
+40–59 → sınırlı risk (yeşil)<br>
+60–79 → artan risk (sarı)<br>
+80–89 → yüksek risk (turuncu)<br>
+90+ → çok yüksek risk (kırmızı)
 </p>
-
 <p>
-Renk skalası:
-<br>0–39 → düşük risk (mavi)
-<br>40–59 → sınırlı risk (yeşil)
-<br>60–79 → artan risk (sarı)
-<br>80–89 → yüksek risk (turuncu)
-<br>90+ → çok yüksek risk (kırmızı)
-</p>
-
-<p>
-Bu araç doğrudan ihlal tespiti yapmaz; yalnızca sektörlerdeki fiyat baskısı yoğunluğunu
-ve potansiyel inceleme riskini görselleştirir.
+Bu araç doğrudan ihlal tespiti yapmaz; yalnızca fiyat baskısı yoğunluğunu görselleştirir.
 </p>
 </div>
 
@@ -259,107 +232,106 @@ function changeClass(v){
 }
 
 function changeText(v){
-  return v > 0 ? "+" + v : v;
+  if(v === null || v === undefined) return "—";
+  return (v > 0 ? "+" : "") + Number(v).toFixed(2) + "%";
 }
 
 fetch("data.json")
-.then(r=>r.json())
-.then(data=>{
+  .then(r => r.json())
+  .then(data => {
 
-document.getElementById("meta").innerText =
-`${data.subtitle} • ${data.updated_at}`;
+    document.getElementById("meta").innerText =
+      (data.subtitle || "") + " • " + (data.updated_at || "");
 
-const groups = data.groups.sort((a,b)=>b.score-a.score);
+    const groups = (data.groups || []).slice().sort((a,b) => b.score - a.score);
 
-const top3 = document.getElementById("top3");
+    if(groups.length === 0){
+      document.getElementById("top3").innerHTML =
+        '<div class="empty-state" style="grid-column:1/-1">Henüz veri yok. Workflow çalıştırıldıktan sonra sektörler burada görünecek.</div>';
+      document.getElementById("groups").innerHTML =
+        '<div class="empty-state">Veri bekleniyor...</div>';
+      return;
+    }
 
-groups.slice(0,3).forEach((g,i)=>{
-  const el=document.createElement("div");
-  el.className="mini";
-  el.innerHTML=`
-    <div class="rank">${i+1}. sıra</div>
-    <div class="sector">${g.name}</div>
-    <div class="score">${g.score}</div>
-    <div class="${changeClass(g.change)}">Aylık değişim: ${changeText(g.change)}</div>
-  `;
-  top3.appendChild(el);
-});
+    const top3el = document.getElementById("top3");
+    groups.slice(0,3).forEach((g,i) => {
+      const el = document.createElement("div");
+      el.className = "mini";
+      el.innerHTML = `
+        <div class="rank">${i+1}. sıra</div>
+        <div class="sector">${g.name}</div>
+        <div class="score" style="color:${g.color||''}">${g.score}</div>
+        <div class="${changeClass(g.change)}">Aylık: ${changeText(g.change)}</div>
+      `;
+      top3el.appendChild(el);
+    });
 
-const groupsWrap=document.getElementById("groups");
+    const groupsWrap = document.getElementById("groups");
+    groups.forEach(g => {
+      const children = (g.children || []).slice().sort((a,b) => b.score - a.score);
 
-groups.forEach(g=>{
+      const wrapper = document.createElement("div");
+      wrapper.className = "group";
 
-const children = g.children.sort((a,b)=>b.score-a.score);
+      const header = document.createElement("div");
+      header.className = "group-row";
+      header.innerHTML = `
+        <div>
+          <strong>${g.name}</strong>
+          <div class="reason">${g.reason || ""}</div>
+        </div>
+        <div class="track">
+          <div class="fill ${colorClass(g.score)}" style="width:${Math.min(g.score,100)}%"></div>
+        </div>
+        <div>${g.score}</div>
+      `;
 
-const wrapper=document.createElement("div");
-wrapper.className="group";
+      const childBox = document.createElement("div");
+      childBox.className = "children";
 
-const header=document.createElement("div");
-header.className="group-row";
+      children.forEach(c => {
+        const row = document.createElement("div");
+        row.className = "child-row";
+        row.innerHTML = `
+          <div>
+            ${c.name}
+            <div class="reason">${c.reason || ""}</div>
+          </div>
+          <div class="track">
+            <div class="fill ${colorClass(c.score)}" style="width:${Math.min(c.score,100)}%"></div>
+          </div>
+          <div>${c.score}</div>
+        `;
+        childBox.appendChild(row);
+      });
 
-header.innerHTML=`
-  <div><strong>${g.name}</strong></div>
-  <div class="track">
-    <div class="fill ${colorClass(g.score)}" style="width:${g.score}%"></div>
-  </div>
-  <div>${g.score}</div>
-`;
+      header.onclick = () => childBox.classList.toggle("open");
+      wrapper.appendChild(header);
+      wrapper.appendChild(childBox);
+      groupsWrap.appendChild(wrapper);
+    });
 
-const childBox=document.createElement("div");
-childBox.className="children";
+    const summary = document.getElementById("summary");
+    groups.forEach(g => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>
+          <strong>${g.name}</strong>
+          <div class="reason">${g.reason || ""}</div>
+        </td>
+        <td>${g.score}</td>
+        <td class="${changeClass(g.change)}">${changeText(g.change)}</td>
+      `;
+      summary.appendChild(tr);
+    });
 
-children.forEach(c=>{
-  const row=document.createElement("div");
-  row.className="child-row";
-
-  row.innerHTML=`
-    <div>
-      ${c.name}
-      <div class="reason">${c.reason}</div>
-    </div>
-    <div class="track">
-      <div class="fill ${colorClass(c.score)}" style="width:${c.score}%"></div>
-    </div>
-    <div>${c.score}</div>
-  `;
-
-  childBox.appendChild(row);
-});
-
-header.onclick=()=>{
-  childBox.classList.toggle("open");
-};
-
-wrapper.appendChild(header);
-wrapper.appendChild(childBox);
-groupsWrap.appendChild(wrapper);
-
-});
-
-const summary=document.getElementById("summary");
-
-groups.forEach(g=>{
-  const tr=document.createElement("tr");
-
-  tr.innerHTML=`
-    <td>
-      <strong>${g.name}</strong>
-      <div class="reason">${g.reason}</div>
-    </td>
-    <td>${g.score}</td>
-    <td class="${changeClass(g.change)}">${changeText(g.change)}</td>
-  `;
-
-  summary.appendChild(tr);
-});
-
-});
+  })
+  .catch(err => {
+    document.getElementById("meta").innerText = "Veri yüklenemedi: " + err.message;
+    console.error("data.json yüklenemedi:", err);
+  });
 
 </script>
 
-</body>
-</html>
-</html>
-  </script>
 </body>
 </html>

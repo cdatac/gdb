@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(exit 0)",
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(powershell -Command \"Get-Location; Get-ChildItem ''D:\\\\Users\\\\cdata\\\\GitHub\\\\gdb'' -Name\")",
+      "Bash(git -C \"D:/Users/cdata/GitHub/gdb\" add -A)",
+      "Bash(git -C \"D:/Users/cdata/GitHub/gdb\" status --short)"
+    ]
+  }
+}

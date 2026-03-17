@@ -1,23 +1,44 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
+"""
+Gökdemir Barometresi — Puanlama Motoru
+
+Giriş:  data/raw/tuik_latest.json   (scrape_tuik.py çıktısı)
+Çıktı:  docs/data.json              (frontend'in okuduğu skor çıktısı)
+
+Her sektör için 5 alt metrik hesaplar:
+  - level_score:        Mevcut fiyat baskısı seviyesi         (ağırlık: 0.40)
+  - trend_score:        Yüksek seviyenin sürekliliği          (ağırlık: 0.25)
+  - acceleration_score: Artışın hızlanıp hızlanmadığı        (ağırlık: 0.15)
+  - volatility_score:   Serinin dalgalanma düzeyi             (ağırlık: 0.10)
+  - persistence_score:  Eşik üstünde kalma yoğunluğu         (ağırlık: 0.10)
+
+Renk skalası:
+  0-39  → mavi    (düşük risk)
+  40-59 → yeşil   (sınırlı risk)
+  60-79 → SARI    (artan risk)  ← 60-80 SARI; yanıltıcı mavi kullanılmaz
+  80-89 → turuncu (yüksek risk)
+  90+   → kırmızı (çok yüksek risk)
+"""
 
 from __future__ import annotations
 
 import json
-import math
-from collections import defaultdict
+import sys
 from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-
+from typing import Any, Dict, List
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = ROOT / "data"
-DIST_DIR = ROOT / "dist"
+INPUT_JSON = ROOT / "data" / "raw" / "tuik_latest.json"
+CACHE_JSON = ROOT / "data" / "cache" / "tuik_latest.json"
+OUTPUT_JSON = ROOT / "docs" / "data.json"
 
-INPUT_JSON = DATA_DIR / "tuik_families.json"
-OUTPUT_JSON = DIST_DIR / "tree.json"
+PERSISTENCE_THRESHOLD = 40.0
 
+
+# ---------------------------------------------------------------------------
+# Yardımcılar
+# ---------------------------------------------------------------------------
 
 def clamp(v: float, lo: float, hi: float) -> float:
     return max(lo, min(hi, v))
@@ -26,233 +47,186 @@ def clamp(v: float, lo: float, hi: float) -> float:
 def safe_float(v: Any, default: float = 0.0) -> float:
     try:
         return float(v)
-    except Exception:
+    except (TypeError, ValueError):
         return default
-
-
-def normalize_linear(value: float, lo: float, hi: float) -> float:
-    if hi <= lo:
-        return 0.0
-    return clamp((value - lo) / (hi - lo), 0.0, 1.0)
 
 
 def score_color(score: float) -> str:
     """
-    İstenen bant:
-    0-59: mavi tonları
-    60-79: sarı tonları
-    80-100: kırmızı tonları
+    60-79 bölgesi sarı — dikkat gerektiren bölge.
+    Mavi sadece gerçekten düşük risk için kullanılır.
     """
     s = round(score)
-
+    if s < 40:
+        return "#3b82f6" if s >= 20 else "#93c5fd"
     if s < 60:
-        if s < 20:
-            return "#dbeafe"
-        if s < 40:
-            return "#93c5fd"
-        return "#3b82f6"
-
+        return "#4ade80" if s >= 50 else "#86efac"
     if s < 80:
         if s < 67:
             return "#fde68a"
         if s < 74:
             return "#facc15"
         return "#eab308"
-
     if s < 90:
         return "#f97316"
     return "#dc2626"
 
 
-def metric_weight(metric: str) -> float:
-    weights = {
-        "monthly_change": 0.35,
-        "annual_change": 0.35,
-        "twelve_month_avg": 0.20,
-        "december_change": 0.10,
-    }
-    return weights.get(metric, 0.10)
+# ---------------------------------------------------------------------------
+# Alt metrikler
+# ---------------------------------------------------------------------------
 
-
-def compute_trend_score(records: List[Dict[str, Any]]) -> float:
-    """
-    Fiyat yüksekliğinin ne süredir devam ettiği önemli dendiği için:
-    yüksek seviyede kalan metriğe süre bazlı puan veriyoruz.
-    Veri azsa mevcut seviyeyi proxy olarak kullanıyoruz.
-    """
-    if not records:
-        return 0.0
-
-    vals = sorted(
-        [safe_float(r.get("value")) for r in records if r.get("metric") in ("annual_change", "twelve_month_avg", "monthly_change")]
-    )
-    if not vals:
-        return 0.0
-
-    latest = vals[-1]
-    avg = sum(vals) / len(vals)
-    persistence = (latest * 0.6) + (avg * 0.4)
-    return clamp(persistence, 0.0, 100.0)
-
-
-def compute_volatility_score(records: List[Dict[str, Any]]) -> float:
-    """
-    Tek dönem veri varsa monthly_change'i proxy kullan.
-    Daha fazla veri varsa stddev yaklaşımı.
-    """
-    vals = [safe_float(r.get("value")) for r in records if r.get("metric") in ("monthly_change", "annual_change")]
-    if not vals:
-        return 0.0
-    if len(vals) == 1:
-        return clamp(vals[0] * 8.0, 0.0, 100.0)
-
-    mean = sum(vals) / len(vals)
-    variance = sum((x - mean) ** 2 for x in vals) / len(vals)
-    stddev = math.sqrt(variance)
-    return clamp(stddev * 8.0, 0.0, 100.0)
-
-
-def compute_acceleration_score(records: List[Dict[str, Any]]) -> float:
-    """
-    Annual ile 12 aylık ortalama arasındaki fark ve monthly_change'ın yüksekliği
-    ivmelenme proxy'si olarak kullanılıyor.
-    """
-    annual = None
-    avg12 = None
-    monthly = None
-
-    for r in records:
-        metric = r.get("metric")
-        value = safe_float(r.get("value"))
-        if metric == "annual_change":
-            annual = value
-        elif metric == "twelve_month_avg":
-            avg12 = value
-        elif metric == "monthly_change":
-            monthly = value
-
-    diff = 0.0
-    if annual is not None and avg12 is not None:
-        diff += max(annual - avg12, 0.0) * 1.8
-    if monthly is not None:
-        diff += monthly * 6.0
-
-    return clamp(diff, 0.0, 100.0)
-
-
-def compute_level_score(records: List[Dict[str, Any]]) -> float:
-    """
-    Mevcut seviye riski:
-    - annual_change en kritik
-    - 12 aylık ortalama orta
-    - aylık değişim kısa dönem baskı
-    """
-    annual = 0.0
-    avg12 = 0.0
-    monthly = 0.0
-
-    for r in records:
-        metric = r.get("metric")
-        value = safe_float(r.get("value"))
-        if metric == "annual_change":
-            annual = value
-        elif metric == "twelve_month_avg":
-            avg12 = value
-        elif metric == "monthly_change":
-            monthly = value
-
+def compute_level_score(annual: float, monthly: float, avg12: float) -> float:
     raw = (annual * 0.55) + (avg12 * 0.30) + (monthly * 3.0 * 0.15)
     return clamp(raw, 0.0, 100.0)
 
 
-def compute_composite_score(records: List[Dict[str, Any]]) -> Dict[str, float]:
-    level_score = compute_level_score(records)
-    trend_score = compute_trend_score(records)
-    volatility_score = compute_volatility_score(records)
-    acceleration_score = compute_acceleration_score(records)
+def compute_trend_score(annual: float, avg12: float) -> float:
+    diff = annual - avg12
+    raw = 50.0 + diff * 1.5
+    return clamp(raw, 0.0, 100.0)
 
-    # Nihai ağırlıklar
-    total = (
-        level_score * 0.45
-        + trend_score * 0.25
-        + volatility_score * 0.15
-        + acceleration_score * 0.15
+
+def compute_acceleration_score(annual: float, monthly: float) -> float:
+    annualized_monthly = monthly * 12.0
+    diff = annualized_monthly - annual
+    raw = 50.0 + diff * 1.0
+    return clamp(raw, 0.0, 100.0)
+
+
+def compute_volatility_score(annual: float, monthly: float) -> float:
+    annual_monthly_equiv = annual / 12.0
+    deviation = abs(monthly - annual_monthly_equiv)
+    return clamp(deviation * 8.0, 0.0, 100.0)
+
+
+def compute_persistence_score(annual: float, avg12: float) -> float:
+    above_annual = max(0.0, annual - PERSISTENCE_THRESHOLD)
+    above_avg12 = max(0.0, avg12 - PERSISTENCE_THRESHOLD)
+    raw = (above_annual * 0.6 + above_avg12 * 0.4) * 1.5
+    return clamp(raw, 0.0, 100.0)
+
+
+def compute_composite(annual: float, monthly: float, avg12: float) -> Dict[str, float]:
+    level = compute_level_score(annual, monthly, avg12)
+    trend = compute_trend_score(annual, avg12)
+    accel = compute_acceleration_score(annual, monthly)
+    volat = compute_volatility_score(annual, monthly)
+    perst = compute_persistence_score(annual, avg12)
+
+    total = clamp(
+        level * 0.40 + trend * 0.25 + accel * 0.15 + volat * 0.10 + perst * 0.10,
+        0.0, 100.0,
     )
-    total = clamp(total, 0.0, 100.0)
-
     return {
         "score": round(total, 1),
-        "level_score": round(level_score, 1),
-        "trend_score": round(trend_score, 1),
-        "volatility_score": round(volatility_score, 1),
-        "acceleration_score": round(acceleration_score, 1),
+        "level_score": round(level, 1),
+        "trend_score": round(trend, 1),
+        "acceleration_score": round(accel, 1),
+        "volatility_score": round(volat, 1),
+        "persistence_score": round(perst, 1),
     }
 
+
+def build_reason(annual: float, monthly: float, avg12: float) -> str:
+    parts = [f"Yıllık: {annual:.1f}%"]
+    if avg12:
+        parts.append(f"12-ay ort: {avg12:.1f}%")
+    parts.append(f"Aylık: {monthly:.1f}%")
+    return " | ".join(parts)
+
+
+# ---------------------------------------------------------------------------
+# Veri yükleme
+# ---------------------------------------------------------------------------
 
 def load_input() -> Dict[str, Any]:
-    if not INPUT_JSON.exists():
-        raise FileNotFoundError(f"Input not found: {INPUT_JSON}")
-    return json.loads(INPUT_JSON.read_text(encoding="utf-8"))
+    if INPUT_JSON.exists():
+        return json.loads(INPUT_JSON.read_text(encoding="utf-8"))
+    if CACHE_JSON.exists():
+        print(f"[WARN] raw dosya yok, cache kullanılıyor: {CACHE_JSON}", file=sys.stderr)
+        return json.loads(CACHE_JSON.read_text(encoding="utf-8"))
+    raise FileNotFoundError(
+        f"Giriş dosyası bulunamadı: {INPUT_JSON}\n"
+        "scrape_tuik.py'yi önce çalıştırın."
+    )
 
 
-def build_nodes(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
-    groups = payload.get("groups", [])
-    nodes: List[Dict[str, Any]] = []
+# ---------------------------------------------------------------------------
+# Grup oluşturma
+# ---------------------------------------------------------------------------
 
-    for g in groups:
-        records = g.get("records", [])
-        if not records:
+def build_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    groups: List[Dict[str, Any]] = []
+
+    for family_result in payload.get("families", []):
+        sectors = family_result.get("sectors", [])
+        if not sectors:
             continue
 
-        score_parts = compute_composite_score(records)
-        score = score_parts["score"]
+        for sector in sectors:
+            sector_id = str(sector.get("id", ""))
+            if sector_id.startswith("00"):
+                continue
 
-        by_metric = defaultdict(list)
-        for r in records:
-            by_metric[r.get("metric")].append(r)
+            annual = safe_float(sector.get("annual_change"))
+            monthly = safe_float(sector.get("monthly_change"))
+            avg12 = safe_float(sector.get("twelve_month_avg"))
 
-        detail = {}
-        for metric, items in by_metric.items():
-            # aynı metric birden fazla varsa en sonuncusunu al
-            latest = items[-1]
-            detail[metric] = {
-                "value": latest.get("value"),
-                "date": latest.get("date"),
-                "unit": latest.get("unit"),
-            }
+            if annual == 0.0 and monthly == 0.0:
+                continue
 
-        node = {
-            "id": g.get("family_id"),
-            "name": g.get("title"),
-            "type": "indicator",
-            "score": score,
-            "color": score_color(score),
-            "metrics": detail,
-            "score_parts": score_parts,
-            "source_url": g.get("url"),
-            "record_count": len(records),
-        }
-        nodes.append(node)
+            scores = compute_composite(annual, monthly, avg12)
+            score = scores["score"]
 
-    nodes.sort(key=lambda x: x["score"], reverse=True)
-    return nodes
+            groups.append({
+                "id": sector_id,
+                "name": sector.get("name", ""),
+                "score": score,
+                "color": score_color(score),
+                "change": round(monthly, 2),
+                "reason": build_reason(annual, monthly, avg12),
+                "score_parts": scores,
+                "source_url": family_result.get("source_url", ""),
+                "children": [],
+            })
 
+    groups.sort(key=lambda x: x["score"], reverse=True)
+    return groups
+
+
+# ---------------------------------------------------------------------------
+# Main
+# ---------------------------------------------------------------------------
 
 def main() -> int:
-    DIST_DIR.mkdir(parents=True, exist_ok=True)
-    payload = load_input()
-    nodes = build_nodes(payload)
+    try:
+        payload = load_input()
+    except FileNotFoundError as exc:
+        print(f"[HATA] {exc}", file=sys.stderr)
+        return 1
+
+    groups = build_groups(payload)
+
+    scraped_at = payload.get("scraped_at", "")
+    updated_at = scraped_at[:10] if scraped_at else date.today().isoformat()
 
     tree = {
-        "title": payload.get("title", "Gökdemir Barometresi"),
-        "subtitle": payload.get("subtitle", ""),
-        "updated_at": payload.get("updated_at", date.today().isoformat()),
-        "nodes": nodes,
+        "title": "Gökdemir Barometresi",
+        "subtitle": "En riskli sektörler (TÜİK verisi)",
+        "updated_at": updated_at,
+        "groups": groups,
     }
 
+    OUTPUT_JSON.parent.mkdir(parents=True, exist_ok=True)
     OUTPUT_JSON.write_text(json.dumps(tree, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[INFO] wrote: {OUTPUT_JSON}")
-    print(f"[INFO] node_count={len(nodes)}")
+
+    print(f"[INFO] Yazıldı: {OUTPUT_JSON}")
+    print(f"[INFO] Grup sayısı: {len(groups)}")
+    if groups:
+        top = groups[0]
+        print(f"[INFO] En riskli: {top['name']} → {top['score']}")
+
     return 0
 
 

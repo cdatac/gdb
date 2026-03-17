@@ -1,17 +1,273 @@
 {
   "title": "Gökdemir Barometresi",
-  "subtitle": "En riskli 10 sektör",
-  "updated_at": "Bugün",
-  "items": [
-    {"sector": "Eğitim", "score": 94, "change": 6, "reason": "Yüksek fiyat artışı"},
-    {"sector": "Hukuk ve Muhasebe", "score": 89, "change": 4, "reason": "Profesyonel hizmet baskısı"},
-    {"sector": "Sağlık", "score": 84, "change": 3, "reason": "Hizmet enflasyonu yüksek"},
-    {"sector": "Lokanta ve Oteller", "score": 81, "change": 2, "reason": "Hizmet maliyetleri"},
-    {"sector": "Ulaştırma", "score": 77, "change": -1, "reason": "Maliyet geçişi"},
-    {"sector": "Telekom", "score": 74, "change": 1, "reason": "Fiyat ayarlamaları"},
-    {"sector": "Gayrimenkul", "score": 72, "change": 5, "reason": "Kira baskısı"},
-    {"sector": "Finansal Hizmetler", "score": 68, "change": 2, "reason": "Fiyatlama davranışı"},
-    {"sector": "Medya ve Yayıncılık", "score": 64, "change": 3, "reason": "Üretim maliyeti"},
-    {"sector": "Destek Hizmetleri", "score": 61, "change": 0, "reason": "Sabit yüksek seviye"}
+  "subtitle": "En riskli 10 ana sektör",
+  "updated_at": "2026-03-17",
+  "groups": [
+    {
+      "name": "Eğitim",
+      "score": 93,
+      "change": 4,
+      "reason": "Eğitim alt kırılımlarında risk yüksek.",
+      "children": [
+        {
+          "name": "Okul Öncesi Eğitim",
+          "score": 96,
+          "change": 5,
+          "reason": "Yıllık artış çok yüksek."
+        },
+        {
+          "name": "İlköğretim",
+          "score": 95,
+          "change": 4,
+          "reason": "Genel endeksten güçlü ayrışma."
+        },
+        {
+          "name": "Ortaöğretim",
+          "score": 93,
+          "change": 4,
+          "reason": "Fiyat artışı yüksek seyrediyor."
+        },
+        {
+          "name": "Yükseköğretim",
+          "score": 89,
+          "change": 2,
+          "reason": "Artış devam ediyor."
+        }
+      ]
+    },
+    {
+      "name": "Hukuk ve Muhasebe Hizmetleri",
+      "score": 89,
+      "change": 3,
+      "reason": "Hukuk ve Muhasebe Hizmetleri alt kırılımlarında risk yüksek.",
+      "children": [
+        {
+          "name": "Hukuk Hizmetleri",
+          "score": 91,
+          "change": 3,
+          "reason": "Yüksek fiyat baskısı."
+        },
+        {
+          "name": "Denetim Hizmetleri",
+          "score": 88,
+          "change": 3,
+          "reason": "Profesyonel hizmet fiyatlaması güçlü."
+        },
+        {
+          "name": "Muhasebe Hizmetleri",
+          "score": 87,
+          "change": 2,
+          "reason": "Kalıcı maliyet baskısı."
+        }
+      ]
+    },
+    {
+      "name": "Sağlık Hizmetleri",
+      "score": 84,
+      "change": 3,
+      "reason": "Sağlık Hizmetleri alt kırılımlarında risk yüksek.",
+      "children": [
+        {
+          "name": "Ayakta Tedavi Hizmetleri",
+          "score": 86,
+          "change": 3,
+          "reason": "Hizmet enflasyonu yüksek."
+        },
+        {
+          "name": "Diş Sağlığı Hizmetleri",
+          "score": 84,
+          "change": 4,
+          "reason": "Artış ivmesi devam ediyor."
+        },
+        {
+          "name": "Tıbbi Analiz Hizmetleri",
+          "score": 82,
+          "change": 2,
+          "reason": "Fiyat baskısı sürüyor."
+        }
+      ]
+    },
+    {
+      "name": "Lokanta ve Oteller",
+      "score": 81,
+      "change": 2,
+      "reason": "Lokanta ve Oteller alt kırılımlarında risk yüksek.",
+      "children": [
+        {
+          "name": "Lokanta Hizmetleri",
+          "score": 83,
+          "change": 2,
+          "reason": "Hizmet maliyetleri yüksek."
+        },
+        {
+          "name": "Kafe ve Fast Food",
+          "score": 80,
+          "change": 1,
+          "reason": "Fiyat seviyesi yüksek kalıyor."
+        },
+        {
+          "name": "Konaklama Hizmetleri",
+          "score": 79,
+          "change": 2,
+          "reason": "Turizm bağlantılı fiyat baskısı."
+        }
+      ]
+    },
+    {
+      "name": "Ulaştırma",
+      "score": 77,
+      "change": 0,
+      "reason": "Ulaştırma alt kırılımlarında risk yüksek.",
+      "children": [
+        {
+          "name": "Kara Taşımacılığı",
+          "score": 79,
+          "change": 1,
+          "reason": "Maliyet geçişkenliği sürüyor."
+        },
+        {
+          "name": "Yük Taşımacılığı",
+          "score": 77,
+          "change": 0,
+          "reason": "Fiyat farkı korunuyor."
+        },
+        {
+          "name": "Yolcu Taşımacılığı",
+          "score": 76,
+          "change": -1,
+          "reason": "Artış hızı zayıfladı ama seviye yüksek."
+        }
+      ]
+    },
+    {
+      "name": "Telekom",
+      "score": 74,
+      "change": 1,
+      "reason": "Telekom alt kırılımlarında risk yüksek.",
+      "children": [
+        {
+          "name": "Mobil Haberleşme",
+          "score": 75,
+          "change": 1,
+          "reason": "Tarife ayarlamaları etkili."
+        },
+        {
+          "name": "Veri İletim Hizmetleri",
+          "score": 74,
+          "change": 2,
+          "reason": "Fiyat ayarlamaları sürüyor."
+        },
+        {
+          "name": "Sabit İnternet",
+          "score": 73,
+          "change": 1,
+          "reason": "Hizmet fiyat seviyesi yüksek."
+        }
+      ]
+    },
+    {
+      "name": "Gayrimenkul Hizmetleri",
+      "score": 72,
+      "change": 5,
+      "reason": "Gayrimenkul Hizmetleri alt kırılımlarında risk yüksek.",
+      "children": [
+        {
+          "name": "Emlak Komisyon Hizmetleri",
+          "score": 73,
+          "change": 5,
+          "reason": "Kira bağlantılı baskı."
+        },
+        {
+          "name": "Kiralama Aracılık Hizmetleri",
+          "score": 72,
+          "change": 5,
+          "reason": "Fiyat seviyesi yüksek."
+        },
+        {
+          "name": "Gayrimenkul Yönetim Hizmetleri",
+          "score": 71,
+          "change": 4,
+          "reason": "Katılık sürüyor."
+        }
+      ]
+    },
+    {
+      "name": "Finansal Hizmetler",
+      "score": 68,
+      "change": 2,
+      "reason": "Finansal Hizmetler alt kırılımlarında risk yüksek.",
+      "children": [
+        {
+          "name": "Sigorta Hizmetleri",
+          "score": 69,
+          "change": 2,
+          "reason": "Fiyatlama davranışı yukarı yönlü."
+        },
+        {
+          "name": "Finansal Danışmanlık",
+          "score": 68,
+          "change": 2,
+          "reason": "Hizmet fiyatlaması güçlü."
+        },
+        {
+          "name": "Aracılık Komisyonları",
+          "score": 67,
+          "change": 1,
+          "reason": "Ücret artışları sürüyor."
+        }
+      ]
+    },
+    {
+      "name": "Medya ve Yayıncılık",
+      "score": 64,
+      "change": 3,
+      "reason": "Medya ve Yayıncılık alt kırılımlarında risk yüksek.",
+      "children": [
+        {
+          "name": "Video İçerik Üretimi",
+          "score": 66,
+          "change": 3,
+          "reason": "Üretim maliyetleri yüksek."
+        },
+        {
+          "name": "Reklam Prodüksiyon",
+          "score": 64,
+          "change": 3,
+          "reason": "Fiyat seviyesi yüksek."
+        },
+        {
+          "name": "Yayıncılık Hizmetleri",
+          "score": 63,
+          "change": 2,
+          "reason": "Maliyet baskısı sürüyor."
+        }
+      ]
+    },
+    {
+      "name": "Destek Hizmetleri",
+      "score": 61,
+      "change": 0,
+      "reason": "Destek Hizmetleri alt kırılımlarında risk yüksek.",
+      "children": [
+        {
+          "name": "Temizlik Hizmetleri",
+          "score": 62,
+          "change": 0,
+          "reason": "Fiyat farkı devam ediyor."
+        },
+        {
+          "name": "Çağrı Merkezi Hizmetleri",
+          "score": 61,
+          "change": 1,
+          "reason": "Hizmet fiyat baskısı sınırlı ama mevcut."
+        },
+        {
+          "name": "Güvenlik Hizmetleri",
+          "score": 60,
+          "change": 0,
+          "reason": "Risk orta seviyede."
+        }
+      ]
+    }
   ]
 }

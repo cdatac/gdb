@@ -1,0 +1,1 @@
+<html><body><h1>Barometre</h1><div id='app'></div><script>fetch('data.json').then(r=>r.json()).then(d=>{document.getElementById('app').innerHTML=d.map(x=>x.sector+': '+x.score).join('<br>')})</script></body></html>

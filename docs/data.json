@@ -1,67 +1,17 @@
 {
   "title": "Gökdemir Barometresi",
   "subtitle": "En riskli 10 sektör",
-  "updated_at": "Otomatik üretildi",
+  "updated_at": "Bugün",
   "items": [
-    {
-      "sector": "Eğitim",
-      "score": 94,
-      "change": 6,
-      "reason": "Sektör enflasyonu genel endeksin belirgin üzerinde."
-    },
-    {
-      "sector": "Hukuk ve Muhasebe Hizmetleri",
-      "score": 89,
-      "change": 4,
-      "reason": "Profesyonel hizmetlerde fiyat artışı yüksek seyrediyor."
-    },
-    {
-      "sector": "Sağlık Hizmetleri",
-      "score": 84,
-      "change": 3,
-      "reason": "Hizmet fiyatlarında kalıcılık devam ediyor."
-    },
-    {
-      "sector": "Lokanta ve Oteller",
-      "score": 81,
-      "change": 2,
-      "reason": "Hizmet enflasyonu baskısı sürüyor."
-    },
-    {
-      "sector": "Ulaştırma Hizmetleri",
-      "score": 77,
-      "change": -1,
-      "reason": "Maliyet geçişkenliği zayıflasa da seviye yüksek."
-    },
-    {
-      "sector": "Telekomünikasyon",
-      "score": 74,
-      "change": 1,
-      "reason": "Fiyat ayarlamaları sektörel riski yukarı taşıyor."
-    },
-    {
-      "sector": "Gayrimenkul Hizmetleri",
-      "score": 72,
-      "change": 5,
-      "reason": "Kira ve bağlantılı hizmetlerde katılık sürüyor."
-    },
-    {
-      "sector": "Sigorta ve Finansal Hizmetler",
-      "score": 68,
-      "change": 2,
-      "reason": "Hizmet fiyatlamasında yukarı yönlü baskı var."
-    },
-    {
-      "sector": "Yayıncılık ve Medya Üretimi",
-      "score": 64,
-      "change": 3,
-      "reason": "İçerik üretim maliyetleri ve fiyatlar yüksek."
-    },
-    {
-      "sector": "İdari ve Destek Hizmetleri",
-      "score": 61,
-      "change": 0,
-      "reason": "Fiyat farkı devam ediyor ancak ivme sınırlı."
-    }
+    {"sector": "Eğitim", "score": 94, "change": 6, "reason": "Yüksek fiyat artışı"},
+    {"sector": "Hukuk ve Muhasebe", "score": 89, "change": 4, "reason": "Profesyonel hizmet baskısı"},
+    {"sector": "Sağlık", "score": 84, "change": 3, "reason": "Hizmet enflasyonu yüksek"},
+    {"sector": "Lokanta ve Oteller", "score": 81, "change": 2, "reason": "Hizmet maliyetleri"},
+    {"sector": "Ulaştırma", "score": 77, "change": -1, "reason": "Maliyet geçişi"},
+    {"sector": "Telekom", "score": 74, "change": 1, "reason": "Fiyat ayarlamaları"},
+    {"sector": "Gayrimenkul", "score": 72, "change": 5, "reason": "Kira baskısı"},
+    {"sector": "Finansal Hizmetler", "score": 68, "change": 2, "reason": "Fiyatlama davranışı"},
+    {"sector": "Medya ve Yayıncılık", "score": 64, "change": 3, "reason": "Üretim maliyeti"},
+    {"sector": "Destek Hizmetleri", "score": 61, "change": 0, "reason": "Sabit yüksek seviye"}
   ]
 }

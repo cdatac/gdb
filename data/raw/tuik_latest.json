@@ -1,4 +1,29 @@
 {
-  "date": "2026-03-17",
-  "items": []
+  "scraped_at": "2026-03-18T00:00:00",
+  "total_sectors": 12,
+  "families": [
+    {
+      "family": "tuik_tufe",
+      "label": "TÜFE Ana Gruplar",
+      "press_id": "99999",
+      "date": "2026-02",
+      "source_url": "https://veriportali.tuik.gov.tr/tr/press/99999/metadata",
+      "download_url": null,
+      "sectors": [
+        {"id": "01", "name": "01-GIDA VE ALKOLSUZ ICECEKLER", "monthly_change": 3.51, "annual_change": 43.22, "twelve_month_avg": 68.3, "level": 1},
+        {"id": "02", "name": "02-ALKOLU ICKILER VE TUTUN", "monthly_change": 5.12, "annual_change": 71.8, "twelve_month_avg": 80.2, "level": 1},
+        {"id": "03", "name": "03-GIYIM VE AYAKKABI", "monthly_change": 1.2, "annual_change": 28.4, "twelve_month_avg": 35.1, "level": 1},
+        {"id": "04", "name": "04-KONUT", "monthly_change": 2.89, "annual_change": 55.3, "twelve_month_avg": 72.4, "level": 1},
+        {"id": "05", "name": "05-EV ESYASI", "monthly_change": 1.75, "annual_change": 32.1, "twelve_month_avg": 41.5, "level": 1},
+        {"id": "06", "name": "06-SAGLIK", "monthly_change": 2.1, "annual_change": 38.7, "twelve_month_avg": 45.2, "level": 1},
+        {"id": "07", "name": "07-ULASTIRMA", "monthly_change": 0.95, "annual_change": 19.6, "twelve_month_avg": 24.3, "level": 1},
+        {"id": "08", "name": "08-HABERLESME", "monthly_change": 4.3, "annual_change": 52.1, "twelve_month_avg": 58.7, "level": 1},
+        {"id": "09", "name": "09-EGLENCE VE KULTUR", "monthly_change": 2.45, "annual_change": 44.8, "twelve_month_avg": 51.3, "level": 1},
+        {"id": "10", "name": "10-EGITIM", "monthly_change": 0.8, "annual_change": 62.4, "twelve_month_avg": 74.1, "level": 1},
+        {"id": "11", "name": "11-LOKANTA VE OTELLER", "monthly_change": 3.2, "annual_change": 58.9, "twelve_month_avg": 69.5, "level": 1},
+        {"id": "12", "name": "12-CESITLI MAL VE HIZMETLER", "monthly_change": 2.6, "annual_change": 47.3, "twelve_month_avg": 55.8, "level": 1}
+      ],
+      "_note": "TEST VERISI - gercek scraping ile uretilmedi"
+    }
+  ]
 }

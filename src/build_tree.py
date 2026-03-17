@@ -77,37 +77,63 @@ def score_color(score: float) -> str:
 # ---------------------------------------------------------------------------
 
 def compute_level_score(annual: float, monthly: float, avg12: float) -> float:
-    raw = (annual * 0.55) + (avg12 * 0.30) + (monthly * 3.0 * 0.15)
+    """
+    Mutlak seviye riski.
+    MAX_ANNUAL = 80% → 100 puan (Türkiye yüksek enflasyon bağlamında kalibre edilmiş).
+    """
+    MAX_ANNUAL = 80.0
+    peak = max(annual, avg12)
+    norm_peak = clamp(peak / MAX_ANNUAL, 0.0, 1.0) * 100
+    norm_min = clamp(min(annual, avg12) / MAX_ANNUAL, 0.0, 1.0) * 100
+    norm_monthly = clamp(monthly / (MAX_ANNUAL / 12), 0.0, 1.0) * 100
+    raw = norm_peak * 0.65 + norm_min * 0.20 + norm_monthly * 0.15
     return clamp(raw, 0.0, 100.0)
 
 
 def compute_trend_score(annual: float, avg12: float) -> float:
+    """
+    Yön trendi: annual > avg12 ise hızlanıyor (riskli).
+    Yüksek seviyelerde trendin etkisini sınırla — mutlak seviye zaten level_score'da.
+    """
     diff = annual - avg12
-    raw = 50.0 + diff * 1.5
+    # Nötr: 50. Hızlanma: +, Yavaşlama: -
+    raw = 50.0 + clamp(diff * 1.2, -30.0, 30.0)
     return clamp(raw, 0.0, 100.0)
 
 
 def compute_acceleration_score(annual: float, monthly: float) -> float:
+    """
+    Yıllıklaştırılmış aylık değişim gerçek yıllık değişimi aşıyorsa ivme var.
+    """
     annualized_monthly = monthly * 12.0
     diff = annualized_monthly - annual
-    raw = 50.0 + diff * 1.0
+    raw = 50.0 + clamp(diff * 0.8, -30.0, 30.0)
     return clamp(raw, 0.0, 100.0)
 
 
 def compute_volatility_score(annual: float, monthly: float) -> float:
+    """
+    Aylık ile yıllık ortalama aylık arasındaki sapma.
+    """
     annual_monthly_equiv = annual / 12.0
     deviation = abs(monthly - annual_monthly_equiv)
-    return clamp(deviation * 8.0, 0.0, 100.0)
+    return clamp(deviation * 6.0, 0.0, 100.0)
 
 
 def compute_persistence_score(annual: float, avg12: float) -> float:
+    """
+    Her iki metrik de eşiğin (PERSISTENCE_THRESHOLD) üzerindeyse kalıcı baskı var.
+    """
     above_annual = max(0.0, annual - PERSISTENCE_THRESHOLD)
     above_avg12 = max(0.0, avg12 - PERSISTENCE_THRESHOLD)
-    raw = (above_annual * 0.6 + above_avg12 * 0.4) * 1.5
+    raw = (above_annual * 0.6 + above_avg12 * 0.4) * 1.2
     return clamp(raw, 0.0, 100.0)
 
 
 def compute_composite(annual: float, monthly: float, avg12: float) -> Dict[str, float]:
+    """
+    Ağırlıklar: level (0.50) en kritik → mevcut baskı seviyesi belirleyici.
+    """
     level = compute_level_score(annual, monthly, avg12)
     trend = compute_trend_score(annual, avg12)
     accel = compute_acceleration_score(annual, monthly)
@@ -115,7 +141,7 @@ def compute_composite(annual: float, monthly: float, avg12: float) -> Dict[str, 
     perst = compute_persistence_score(annual, avg12)
 
     total = clamp(
-        level * 0.40 + trend * 0.25 + accel * 0.15 + volat * 0.10 + perst * 0.10,
+        level * 0.50 + trend * 0.20 + accel * 0.10 + volat * 0.10 + perst * 0.10,
         0.0, 100.0,
     )
     return {

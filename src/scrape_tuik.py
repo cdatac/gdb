@@ -7,577 +7,344 @@ import json
 import os
 import re
 import sys
-import time
-import traceback
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
+from datetime import date
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
-import requests
-from bs4 import BeautifulSoup
-
-try:
-    from scrapling.fetchers import DynamicFetcher
-    HAS_SCRAPLING = True
-except Exception:
-    HAS_SCRAPLING = False
+from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright
 
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA_DIR = ROOT / "data"
-RAW_DIR = DATA_DIR / "tuik_raw"
-OUT_FILE = DATA_DIR / "tuik_families.json"
+DEBUG_DIR = ROOT / "debug"
+OUTPUT_JSON = DATA_DIR / "tuik_families.json"
 
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-RAW_DIR.mkdir(parents=True, exist_ok=True)
 
-DEBUG = os.getenv("TUIK_DEBUG", "0") == "1"
-TIMEOUT = int(os.getenv("TUIK_TIMEOUT", "60"))
+@dataclass
+class FamilySpec:
+    family_id: str
+    url: str
+    title: str
+    unit: str
+    frequency: str  # monthly / yearly / etc.
 
-USER_AGENT = (
-    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-    "AppleWebKit/537.36 (KHTML, like Gecko) "
-    "Chrome/123.0.0.0 Safari/537.36"
-)
 
-HEADERS = {
-    "User-Agent": USER_AGENT,
-    "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Cache-Control": "no-cache",
-    "Pragma": "no-cache",
-}
-
-PRESS_SPECS: List[Dict[str, Any]] = [
-    {
-        "key": "tuik_tufe",
-        "title": "Tüketici Fiyat Endeksi",
-        "category": "Makro",
-        "source": "TÜİK",
-        "url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-        "must_contain_any": ["Tüketici Fiyat Endeksi", "TÜFE"],
-        "group_rules": [
-            {"match": ["gıda", "alkolsüz içecekler"], "group": "Gıda ve alkolsüz içecekler"},
-            {"match": ["alkollü içecekler", "tütün"], "group": "Alkollü içecekler ve tütün"},
-            {"match": ["giyim", "ayakkabı"], "group": "Giyim ve ayakkabı"},
-            {"match": ["konut"], "group": "Konut"},
-            {"match": ["ev eşyası"], "group": "Ev eşyası"},
-            {"match": ["sağlık"], "group": "Sağlık"},
-            {"match": ["ulaştırma"], "group": "Ulaştırma"},
-            {"match": ["haberleşme"], "group": "Haberleşme"},
-            {"match": ["eğlence", "kültür"], "group": "Eğlence ve kültür"},
-            {"match": ["eğitim"], "group": "Eğitim"},
-            {"match": ["lokanta", "oteller"], "group": "Lokanta ve oteller"},
-            {"match": ["çeşitli mal", "hizmet"], "group": "Çeşitli mal ve hizmetler"},
-        ],
-    },
+FAMILY_SPECS: List[FamilySpec] = [
+    FamilySpec(
+        family_id="tuik_tufe",
+        url="https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
+        title="TÜFE",
+        unit="percent",
+        frequency="monthly",
+    ),
 ]
 
 
-@dataclass
-class HistoryPoint:
-    period: str
-    value: Optional[float]
-    raw_value: str
+def ensure_dirs() -> None:
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    DEBUG_DIR.mkdir(parents=True, exist_ok=True)
 
 
-@dataclass
-class RowRecord:
-    family_key: str
-    family_title: str
-    row_label: str
-    value: Optional[float]
-    raw_value: str
-    unit: Optional[str] = None
-    date_text: Optional[str] = None
-    group: Optional[str] = None
-    sub_group: Optional[str] = None
-    history: Optional[List[Dict[str, Any]]] = None
-    meta: Optional[Dict[str, Any]] = None
-
-
-def log(*args: Any) -> None:
-    print(*args, flush=True)
-
-
-def debug(*args: Any) -> None:
-    if DEBUG:
-        print("[DEBUG]", *args, flush=True)
-
-
-def save_text(path: Path, content: str) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(content, encoding="utf-8")
-
-
-def save_json(path: Path, obj: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def normalize_spaces(text: str) -> str:
-    return re.sub(r"\s+", " ", (text or "")).strip()
-
-
-def normalize_tr(text: str) -> str:
-    text = (text or "").strip().lower()
-    rep = str.maketrans("çğıöşüİI", "cgiosuii")
-    text = text.translate(rep)
-    return normalize_spaces(text)
-
-
-def parse_float_maybe(text: str) -> Optional[float]:
-    if text is None:
+def tr_number_to_float(value: Any) -> Optional[float]:
+    if value is None:
         return None
-    s = normalize_spaces(str(text))
+    s = str(value).strip()
     if not s:
         return None
 
-    s = s.replace("%", "").replace("−", "-").replace("–", "-").replace("\xa0", " ")
+    s = s.replace("\xa0", " ")
+    s = s.replace("%", "")
+    s = s.replace("−", "-").replace("–", "-").replace("—", "-")
+    s = s.replace("·", "").replace(" ", "")
 
-    m = re.search(r"[-+]?\d[\d\.\,]*", s)
-    if not m:
+    # Türkçe format: 1.234,56 -> 1234.56
+    # Basit yüzde/ondalık: 3,12 -> 3.12
+    s = s.replace(".", "").replace(",", ".")
+
+    try:
+        return float(s)
+    except ValueError:
         return None
 
-    num = m.group(0)
-    if "." in num and "," in num:
-        num = num.replace(".", "").replace(",", ".")
-    elif "," in num and "." not in num:
-        num = num.replace(",", ".")
-    try:
-        return float(num)
-    except Exception:
-        return None
+
+def compact_ws(text: str) -> str:
+    return re.sub(r"\s+", " ", text or "").strip()
 
 
-def detect_unit(text: str) -> Optional[str]:
-    t = (text or "").lower()
-    if "%" in t or "yüzde" in t:
-        return "%"
-    if "puan" in t:
-        return "puan"
-    if "endeks" in t:
-        return "endeks"
-    return None
+def month_name_to_num_tr(month_name: str) -> Optional[int]:
+    mapping = {
+        "ocak": 1,
+        "şubat": 2,
+        "subat": 2,
+        "mart": 3,
+        "nisan": 4,
+        "mayıs": 5,
+        "mayis": 5,
+        "haziran": 6,
+        "temmuz": 7,
+        "ağustos": 8,
+        "agustos": 8,
+        "eylül": 9,
+        "eylul": 9,
+        "ekim": 10,
+        "kasım": 11,
+        "kasim": 11,
+        "aralık": 12,
+        "aralik": 12,
+    }
+    return mapping.get(month_name.lower().strip())
 
 
-def infer_group(label: str, group_rules: List[Dict[str, Any]]) -> Optional[str]:
-    nl = normalize_tr(label)
-    for rule in group_rules:
-        tokens = [normalize_tr(x) for x in rule.get("match", [])]
-        if all(tok in nl for tok in tokens):
-            return rule["group"]
-    return None
+def extract_reference_date(text: str) -> str:
+    """
+    Örnek yakalamalar:
+    - Tüketici fiyat endeksi, Şubat 2026
+    - Tüketici Fiyat Endeksi, Mart 2025
+    """
+    patterns = [
+        r"(ocak|şubat|subat|mart|nisan|mayıs|mayis|haziran|temmuz|ağustos|agustos|eylül|eylul|ekim|kasım|kasim|aralık|aralik)\s+(\d{4})",
+        r"(\d{4})\s+(ocak|şubat|subat|mart|nisan|mayıs|mayis|haziran|temmuz|ağustos|agustos|eylül|eylul|ekim|kasım|kasim|aralık|aralik)",
+    ]
+    txt = compact_ws(text).lower()
+
+    for pat in patterns:
+        m = re.search(pat, txt, flags=re.I)
+        if not m:
+            continue
+
+        if pat.startswith("("):
+            month_name, year = m.group(1), m.group(2)
+        else:
+            year, month_name = m.group(1), m.group(2)
+
+        month_num = month_name_to_num_tr(month_name)
+        if month_num:
+            return f"{year}-{month_num:02d}"
+
+    return date.today().strftime("%Y-%m")
 
 
-def fetch_with_requests(url: str) -> Tuple[Optional[str], Dict[str, Any]]:
-    meta: Dict[str, Any] = {"method": "requests", "ok": False, "url": url}
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-        meta["status_code"] = r.status_code
-        meta["final_url"] = str(r.url)
-        meta["content_type"] = r.headers.get("Content-Type")
-        meta["length"] = len(r.text or "")
-        if r.ok and r.text:
-            meta["ok"] = True
-            return r.text, meta
-        return None, meta
-    except Exception as e:
-        meta["error"] = repr(e)
-        return None, meta
+def dump_debug_files(family_id: str, page_url: str, title: str, html: str, text: str) -> None:
+    safe = re.sub(r"[^a-zA-Z0-9_-]+", "_", family_id)
+    (DEBUG_DIR / f"{safe}_url.txt").write_text(page_url, encoding="utf-8")
+    (DEBUG_DIR / f"{safe}_title.txt").write_text(title, encoding="utf-8")
+    (DEBUG_DIR / f"{safe}_page.html").write_text(html, encoding="utf-8")
+    (DEBUG_DIR / f"{safe}_text.txt").write_text(text, encoding="utf-8")
 
 
-def fetch_with_scrapling(url: str) -> Tuple[Optional[str], Dict[str, Any]]:
-    meta: Dict[str, Any] = {"method": "scrapling", "ok": False, "url": url}
-    if not HAS_SCRAPLING:
-        meta["error"] = "Scrapling not installed"
-        return None, meta
-
-    try:
-        page = DynamicFetcher.fetch(
-            url,
-            disable_resources=True,
-            timeout=TIMEOUT * 1000,
-            network_idle=False,
-        )
-        html = getattr(page, "html", None)
-        status = getattr(page, "status", None)
-        meta["status_code"] = status
-        meta["length"] = len(html or "")
-        meta["ok"] = bool(html)
-        return html, meta
-    except Exception as e:
-        meta["error"] = repr(e)
-        return None, meta
-
-
-def fetch_html(url: str, key: str) -> Tuple[Optional[str], Dict[str, Any]]:
-    req_html, req_meta = fetch_with_requests(url)
-    save_json(RAW_DIR / f"{key}_fetch_requests_meta.json", req_meta)
-
-    if req_html and len(req_html) > 800:
-        save_text(RAW_DIR / f"{key}_requests.html", req_html)
-        return req_html, req_meta
-
-    scr_html, scr_meta = fetch_with_scrapling(url)
-    save_json(RAW_DIR / f"{key}_fetch_scrapling_meta.json", scr_meta)
-
-    if scr_html:
-        save_text(RAW_DIR / f"{key}_scrapling.html", scr_html)
-        return scr_html, scr_meta
-
-    return None, {
-        "ok": False,
-        "url": url,
-        "requests": req_meta,
-        "scrapling": scr_meta,
+def record(metric: str, value: float, ref_date: str, family: FamilySpec) -> Dict[str, Any]:
+    return {
+        "family_id": family.family_id,
+        "series": family.title,
+        "metric": metric,
+        "value": value,
+        "unit": family.unit,
+        "frequency": family.frequency,
+        "date": ref_date,
+        "source_url": family.url,
+        "source": "TÜİK",
     }
 
 
-def extract_json_ld(soup: BeautifulSoup) -> List[Dict[str, Any]]:
-    items: List[Dict[str, Any]] = []
-    for tag in soup.find_all("script", attrs={"type": "application/ld+json"}):
-        raw = (tag.string or tag.get_text() or "").strip()
-        if not raw:
-            continue
-        try:
-            parsed = json.loads(raw)
-            if isinstance(parsed, list):
-                items.extend(x for x in parsed if isinstance(x, dict))
-            elif isinstance(parsed, dict):
-                items.append(parsed)
-        except Exception:
-            continue
-    return items
+def extract_tufe_records_from_text(text: str, family: FamilySpec) -> List[Dict[str, Any]]:
+    """
+    Basın bülteni metninden en kritik headline göstergeleri çıkarır.
+    Beklenen kalıplar:
+      - bir önceki aya göre % 2,27
+      - bir önceki yılın aralık ayına göre % 7,42
+      - bir önceki yılın aynı ayına göre % 39,05
+      - on iki aylık ortalamalara göre % 53,83
+    """
+    txt = compact_ws(text)
+    ref_date = extract_reference_date(txt)
 
-
-def extract_candidate_tables(soup: BeautifulSoup) -> List[List[List[str]]]:
-    tables: List[List[List[str]]] = []
-    for table in soup.find_all("table"):
-        rows: List[List[str]] = []
-        for tr in table.find_all("tr"):
-            cells = tr.find_all(["th", "td"])
-            row = [normalize_spaces(c.get_text(" ", strip=True)) for c in cells]
-            if any(cell for cell in row):
-                rows.append(row)
-        if rows:
-            tables.append(rows)
-    return tables
-
-
-def extract_script_blobs(soup: BeautifulSoup) -> List[str]:
-    blobs: List[str] = []
-    for tag in soup.find_all("script"):
-        txt = tag.string or tag.get_text() or ""
-        txt = txt.strip()
-        if len(txt) > 100:
-            blobs.append(txt)
-    return blobs
-
-
-def extract_periods_from_header(header_cells: List[str]) -> List[Optional[str]]:
-    periods: List[Optional[str]] = []
-    for cell in header_cells:
-        cell = normalize_spaces(cell)
-        if re.search(r"(20\d{2}[-/\.]?(0[1-9]|1[0-2]))", cell):
-            m = re.search(r"(20\d{2})[-/\.]?(0[1-9]|1[0-2])", cell)
-            if m:
-                periods.append(f"{m.group(1)}-{m.group(2)}")
-                continue
-        if re.search(r"(ocak|şubat|mart|nisan|mayıs|haziran|temmuz|ağustos|eylül|ekim|kasım|aralık)", cell.lower()):
-            periods.append(cell)
-            continue
-        periods.append(None)
-    return periods
-
-
-def build_history_from_row(row: List[str], periods: List[Optional[str]]) -> List[Dict[str, Any]]:
-    hist: List[Dict[str, Any]] = []
-    for idx, period in enumerate(periods):
-        if idx >= len(row):
-            break
-        if not period:
-            continue
-        raw_val = row[idx]
-        value = parse_float_maybe(raw_val)
-        hist.append(asdict(HistoryPoint(period=period, value=value, raw_value=raw_val)))
-    return hist
-
-
-def table_to_records(
-    table: List[List[str]],
-    family_key: str,
-    family_title: str,
-    group_rules: List[Dict[str, Any]],
-) -> List[RowRecord]:
-    out: List[RowRecord] = []
-    if not table:
-        return out
-
-    header = table[0]
-    header_periods = extract_periods_from_header(header)
-
-    for row in table[1:]:
-        if len(row) < 2:
-            continue
-
-        label = normalize_spaces(row[0])
-        if not label:
-            continue
-
-        if label.lower() in {"madde", "grup", "alt grup", "ana harcama grubu", "açıklama"}:
-            continue
-
-        chosen_value = None
-        chosen_raw = ""
-        for cell in row[1:]:
-            val = parse_float_maybe(cell)
-            if val is not None:
-                chosen_value = val
-                chosen_raw = cell
-                break
-
-        if chosen_value is None:
-            continue
-
-        group = infer_group(label, group_rules)
-        history = build_history_from_row(row, header_periods) if any(header_periods) else []
-
-        out.append(
-            RowRecord(
-                family_key=family_key,
-                family_title=family_title,
-                row_label=label,
-                value=chosen_value,
-                raw_value=chosen_raw,
-                unit=detect_unit(chosen_raw),
-                date_text=None,
-                group=group,
-                sub_group=label if group and group != label else None,
-                history=history,
-                meta={"source": "html_table"},
-            )
-        )
-
-    return out
-
-
-def heuristic_extract_from_scripts(
-    family_key: str,
-    family_title: str,
-    group_rules: List[Dict[str, Any]],
-    script_blobs: List[str],
-) -> List[RowRecord]:
-    out: List[RowRecord] = []
-
-    label_patterns = [
-        r'"label"\s*:\s*"([^"]+)"',
-        r'"name"\s*:\s*"([^"]+)"',
-        r'"group"\s*:\s*"([^"]+)"',
-        r'"title"\s*:\s*"([^"]+)"',
+    metric_patterns = [
+        ("monthly_change", r"bir önceki aya göre\s*%?\s*([\-−–]?\d+[.,]\d+)"),
+        ("december_change", r"bir önceki yılın aralık ayına göre\s*%?\s*([\-−–]?\d+[.,]\d+)"),
+        ("annual_change", r"bir önceki yılın aynı ayına göre\s*%?\s*([\-−–]?\d+[.,]\d+)"),
+        ("twelve_month_avg", r"on iki aylık ortalamalara göre\s*%?\s*([\-−–]?\d+[.,]\d+)"),
     ]
 
-    for blob in script_blobs:
-        labels: List[str] = []
-        values: List[str] = []
+    out: List[Dict[str, Any]] = []
+    seen = set()
 
-        for pat in label_patterns:
-            labels.extend(re.findall(pat, blob, flags=re.IGNORECASE))
-
-        values.extend(re.findall(r'"(?:value|y|amount)"\s*:\s*"([^"]+)"', blob, flags=re.IGNORECASE))
-
-        pairs = min(len(labels), len(values))
-        for i in range(pairs):
-            label = normalize_spaces(labels[i])
-            raw_value = normalize_spaces(values[i])
-            value = parse_float_maybe(raw_value)
-            if not label or value is None:
-                continue
-
-            group = infer_group(label, group_rules)
-            out.append(
-                RowRecord(
-                    family_key=family_key,
-                    family_title=family_title,
-                    row_label=label,
-                    value=value,
-                    raw_value=raw_value,
-                    unit=detect_unit(raw_value),
-                    group=group,
-                    sub_group=label if group and group != label else None,
-                    history=[],
-                    meta={"source": "script_heuristic"},
-                )
-            )
+    for metric_name, pat in metric_patterns:
+        m = re.search(pat, txt, flags=re.I)
+        if not m:
+            continue
+        value = tr_number_to_float(m.group(1))
+        if value is None:
+            continue
+        key = (metric_name, ref_date, value)
+        if key in seen:
+            continue
+        seen.add(key)
+        out.append(record(metric_name, value, ref_date, family))
 
     return out
 
 
-def extract_records_from_html(spec: Dict[str, Any], html: str) -> Tuple[List[RowRecord], Dict[str, Any]]:
-    soup = BeautifulSoup(html, "html.parser")
+def extract_json_candidates_from_html(html: str) -> List[str]:
+    """
+    Bazı SPA'larda script tag içinde hydration/state json kalabilir.
+    Çok agresif parse yerine aday blokları döndürüyoruz.
+    """
+    candidates: List[str] = []
 
-    page_text = normalize_spaces(soup.get_text(" ", strip=True))
-    page_title = normalize_spaces(soup.title.get_text(" ", strip=True)) if soup.title else ""
+    script_patterns = [
+        r"<script[^>]*>\s*window\.__INITIAL_STATE__\s*=\s*(\{.*?\})\s*;</script>",
+        r"<script[^>]*>\s*window\.__NUXT__\s*=\s*(\{.*?\})\s*;</script>",
+        r"<script[^>]*type=['\"]application/json['\"][^>]*>(.*?)</script>",
+    ]
 
-    tables = extract_candidate_tables(soup)
-    json_ld = extract_json_ld(soup)
-    script_blobs = extract_script_blobs(soup)
+    for pat in script_patterns:
+        for m in re.finditer(pat, html, flags=re.I | re.S):
+            candidates.append(m.group(1))
 
-    parse_meta: Dict[str, Any] = {
-        "page_title": page_title,
-        "text_length": len(page_text),
-        "table_count": len(tables),
-        "json_ld_count": len(json_ld),
-        "script_blob_count": len(script_blobs),
-    }
-
-    must = spec.get("must_contain_any") or []
-    if must and not any(m.lower() in page_text.lower() for m in must):
-        parse_meta["must_contain_warning"] = {"expected_any": must, "sample_title": page_title}
-
-    all_records: List[RowRecord] = []
-
-    for table in tables:
-        recs = table_to_records(table, spec["key"], spec["title"], spec.get("group_rules", []))
-        if recs:
-            all_records.extend(recs)
-
-    if not all_records:
-        all_records.extend(
-            heuristic_extract_from_scripts(
-                family_key=spec["key"],
-                family_title=spec["title"],
-                group_rules=spec.get("group_rules", []),
-                script_blobs=script_blobs,
-            )
-        )
-
-    uniq: Dict[Tuple[str, Optional[str], Optional[float]], RowRecord] = {}
-    for r in all_records:
-        k = (r.row_label, r.group, r.value)
-        uniq[k] = r
-
-    final_records = list(uniq.values())
-    parse_meta["record_count"] = len(final_records)
-    parse_meta["history_record_count"] = sum(1 for r in final_records if r.history)
-
-    return final_records, parse_meta
+    return candidates
 
 
-def scrape_family(spec: Dict[str, Any]) -> Dict[str, Any]:
-    key = spec["key"]
-    url = spec["url"]
+def extract_tufe_records_from_json_candidates(candidates: List[str], family: FamilySpec) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    if not candidates:
+        return out
 
-    log(f"[INFO] scraping family={key} url={url}")
-
-    html, fetch_meta = fetch_html(url, key)
-    if not html:
-        return {
-            "key": key,
-            "title": spec["title"],
-            "category": spec.get("category"),
-            "source": spec.get("source"),
-            "url": url,
-            "ok": False,
-            "error": "fetch_failed",
-            "fetch_meta": fetch_meta,
-            "records": [],
-            "groups": [],
-        }
-
-    records, parse_meta = extract_records_from_html(spec, html)
-
-    grouped: Dict[str, List[RowRecord]] = {}
-    for r in records:
-        g = r.group or "Diğer"
-        grouped.setdefault(g, []).append(r)
-
-    groups: List[Dict[str, Any]] = []
-    for group_name, items in sorted(grouped.items(), key=lambda x: x[0]):
-        groups.append(
-            {
-                "name": group_name,
-                "count": len(items),
-                "items": [asdict(x) for x in items],
-            }
-        )
-
-    ok = len(records) > 0
-
-    return {
-        "key": key,
-        "title": spec["title"],
-        "category": spec.get("category"),
-        "source": spec.get("source"),
-        "url": url,
-        "ok": ok,
-        "fetch_meta": fetch_meta,
-        "parse_meta": parse_meta,
-        "record_count": len(records),
-        "records": [asdict(x) for x in records],
-        "groups": groups,
-    }
-
-
-def main() -> None:
-    started = time.time()
-
-    results: List[Dict[str, Any]] = []
-    failures: List[Dict[str, Any]] = []
-
-    for spec in PRESS_SPECS:
+    for candidate in candidates:
         try:
-            family = scrape_family(spec)
-            results.append(family)
-            if not family.get("ok"):
-                failures.append(
-                    {
-                        "key": family["key"],
-                        "error": family.get("error", "no_records"),
-                        "url": family.get("url"),
-                    }
-                )
-        except Exception as e:
-            failures.append(
-                {
-                    "key": spec.get("key"),
-                    "error": repr(e),
-                    "traceback": traceback.format_exc(),
-                }
-            )
-            results.append(
-                {
-                    "key": spec.get("key"),
-                    "title": spec.get("title"),
-                    "category": spec.get("category"),
-                    "source": spec.get("source"),
-                    "url": spec.get("url"),
-                    "ok": False,
-                    "error": repr(e),
-                    "records": [],
-                    "groups": [],
-                }
-            )
+            obj = json.loads(candidate)
+        except Exception:
+            continue
 
-    output = {
-        "generated_at_epoch": int(time.time()),
-        "duration_sec": round(time.time() - started, 2),
-        "ok_family_count": sum(1 for x in results if x.get("ok")),
-        "failed_family_count": sum(1 for x in results if not x.get("ok")),
-        "families": results,
-        "failures": failures,
+        serialized = json.dumps(obj, ensure_ascii=False)
+        text_records = extract_tufe_records_from_text(serialized, family)
+        if text_records:
+            out.extend(text_records)
+
+    # dedupe
+    deduped = []
+    seen = set()
+    for item in out:
+        key = (item["metric"], item["date"], item["value"])
+        if key in seen:
+            continue
+        seen.add(key)
+        deduped.append(item)
+    return deduped
+
+
+def scrape_family(page, family: FamilySpec) -> Dict[str, Any]:
+    print(f"[INFO] scraping family={family.family_id} url={family.url}")
+
+    try:
+        page.goto(family.url, wait_until="domcontentloaded", timeout=120000)
+        page.wait_for_load_state("networkidle", timeout=120000)
+        page.wait_for_timeout(4000)
+    except PlaywrightTimeoutError:
+        # yine de içerik almayı deneyelim
+        pass
+
+    html = page.content()
+    body_text = ""
+    try:
+        body_text = page.locator("body").inner_text(timeout=30000)
+    except Exception:
+        body_text = ""
+
+    page_title = ""
+    try:
+        page_title = page.title()
+    except Exception:
+        page_title = ""
+
+    # 1) önce HTML içindeki olası hydration/json state'leri tara
+    json_candidates = extract_json_candidates_from_html(html)
+    records = extract_tufe_records_from_json_candidates(json_candidates, family)
+
+    # 2) hala yoksa render edilmiş body text'ten regex fallback
+    if not records:
+        records = extract_tufe_records_from_text(body_text, family)
+
+    # 3) hala yoksa debug dump
+    if not records:
+        dump_debug_files(
+            family_id=family.family_id,
+            page_url=page.url,
+            title=page_title,
+            html=html,
+            text=body_text,
+        )
+
+    result = {
+        "family_id": family.family_id,
+        "title": family.title,
+        "url": page.url,
+        "page_title": page_title,
+        "record_count": len(records),
+        "records": records,
     }
 
-    save_json(OUT_FILE, output)
+    print(f"[INFO] family={family.family_id} extracted_records={len(records)}")
+    return result
 
-    log(f"[INFO] wrote: {OUT_FILE}")
-    log(f"[INFO] ok_family_count={output['ok_family_count']} failed_family_count={output['failed_family_count']}")
 
-    total_records = sum(x.get("record_count", 0) for x in results if isinstance(x, dict))
-    if total_records == 0:
-        log("[ERROR] total_records=0 ; scraper no usable data produced")
-        sys.exit(2)
+def main() -> int:
+    ensure_dirs()
+
+    all_groups: List[Dict[str, Any]] = []
+    ok_family_count = 0
+    failed_family_count = 0
+    total_records = 0
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        context = browser.new_context(locale="tr-TR")
+        page = context.new_page()
+
+        for family in FAMILY_SPECS:
+            try:
+                result = scrape_family(page, family)
+                all_groups.append(result)
+
+                if result["record_count"] > 0:
+                    ok_family_count += 1
+                    total_records += result["record_count"]
+                else:
+                    failed_family_count += 1
+            except Exception as exc:
+                failed_family_count += 1
+                err = {
+                    "family_id": family.family_id,
+                    "title": family.title,
+                    "url": family.url,
+                    "record_count": 0,
+                    "records": [],
+                    "error": repr(exc),
+                }
+                all_groups.append(err)
+                print(f"[ERROR] family={family.family_id} error={exc!r}")
+
+        context.close()
+        browser.close()
+
+    payload = {
+        "title": "Gökdemir Barometresi",
+        "subtitle": "En riskli sektörler (TÜİK verisi)",
+        "updated_at": date.today().isoformat(),
+        "groups": all_groups,
+    }
+
+    OUTPUT_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    print(f"[INFO] wrote: {OUTPUT_JSON}")
+    print(f"[INFO] ok_family_count={ok_family_count} failed_family_count={failed_family_count}")
+
+    if total_records <= 0:
+        print("Error:  total_records=0 ; scraper no usable data produced", file=sys.stderr)
+        return 2
+
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

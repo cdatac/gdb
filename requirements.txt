@@ -2,3 +2,4 @@ requests>=2.32.0
 beautifulsoup4>=4.12.3
 lxml>=5.3.0
 scrapling>=0.2.96
+playwright==1.52.0

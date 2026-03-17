@@ -1,349 +1,371 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
-
 from __future__ import annotations
 
+"""
+TUİK Veri Portalı scraper.
+
+This replacement stops scraping the server-rendered HTML of
+`/tr/press/<id>/metadata` pages. Those pages currently return a
+"JavaScript Gerekli / JavaScript Required" shell to plain HTTP clients,
+so static parsing frequently yields zero usable records.
+
+Strategy:
+1. Fetch the metadata page with requests.
+2. If the page is server-rendered and already contains usable download links,
+   extract them directly.
+3. Otherwise, launch Playwright, render the page, and discover real download
+   endpoints from:
+   - network responses
+   - DOM anchors/buttons
+4. Return normalized records pointing to TUİK `/api/{lang}/data/downloads`
+   endpoints (`t=i`, `t=r`, `t=y`, etc.).
+
+Output:
+- JSON list of family results to stdout or to --output path.
+- Non-zero exit code if no family produces any usable records.
+"""
+
+import argparse
 import json
-import os
 import re
 import sys
-from dataclasses import dataclass
-from datetime import date
+from dataclasses import dataclass, asdict
+from html import unescape
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Iterable, List, Dict, Any, Optional, Set
+from urllib.parse import urljoin, parse_qs
 
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-from playwright.sync_api import sync_playwright
+import requests
 
+USER_AGENT = (
+    "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/123.0 Safari/537.36"
+)
 
-ROOT = Path(__file__).resolve().parents[1]
-DATA_DIR = ROOT / "data"
-DEBUG_DIR = ROOT / "debug"
-OUTPUT_JSON = DATA_DIR / "tuik_families.json"
+DOWNLOAD_RE = re.compile(
+    r"https://veriportali\.tuik\.gov\.tr/api/"
+    r"(?P<lang>tr|en)/data/downloads\?(?P<query>[^\"'<> ]+)",
+    re.IGNORECASE,
+)
+
+PRESS_ID_RE = re.compile(r"/press/(\d+)/metadata", re.IGNORECASE)
+TITLE_RE = re.compile(r"<title[^>]*>(.*?)</title>", re.IGNORECASE | re.DOTALL)
+JS_SHELL_MARKERS = (
+    "JavaScript Gerekli",
+    "JavaScript Required",
+    "You need to enable JavaScript in your browser to use this website.",
+)
+HEADERS = {"User-Agent": USER_AGENT, "Accept-Language": "tr,en;q=0.9"}
 
 
 @dataclass
-class FamilySpec:
-    family_id: str
-    url: str
+class Record:
+    family: str
+    source_url: str
+    discovered_via: str
+    download_url: str
     title: str
-    unit: str
-    frequency: str  # monthly / yearly / etc.
+    lang: str
+    type_code: str
+    press_id: Optional[str]
+    query_p: Optional[str]
+
+    def key(self) -> tuple:
+        return (self.download_url, self.title.strip())
 
 
-FAMILY_SPECS: List[FamilySpec] = [
-    FamilySpec(
-        family_id="tuik_tufe",
-        url="https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-        title="TÜFE",
-        unit="percent",
-        frequency="monthly",
-    ),
-]
+def extract_title_from_html(html: str) -> str:
+    m = TITLE_RE.search(html or "")
+    if not m:
+        return ""
+    return re.sub(r"\s+", " ", unescape(m.group(1))).strip()
 
 
-def ensure_dirs() -> None:
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    DEBUG_DIR.mkdir(parents=True, exist_ok=True)
+def is_js_shell(html: str) -> bool:
+    if not html:
+        return False
+    return any(marker in html for marker in JS_SHELL_MARKERS)
 
 
-def tr_number_to_float(value: Any) -> Optional[float]:
-    if value is None:
+def press_id_from_url(url: str) -> Optional[str]:
+    m = PRESS_ID_RE.search(url)
+    return m.group(1) if m else None
+
+
+def normalize_download_record(
+    family: str,
+    source_url: str,
+    discovered_via: str,
+    download_url: str,
+    fallback_title: str = "",
+) -> Optional[Record]:
+    m = DOWNLOAD_RE.search(download_url)
+    if not m:
         return None
-    s = str(value).strip()
-    if not s:
-        return None
-
-    s = s.replace("\xa0", " ")
-    s = s.replace("%", "")
-    s = s.replace("−", "-").replace("–", "-").replace("—", "-")
-    s = s.replace("·", "").replace(" ", "")
-
-    # Türkçe format: 1.234,56 -> 1234.56
-    # Basit yüzde/ondalık: 3,12 -> 3.12
-    s = s.replace(".", "").replace(",", ".")
-
-    try:
-        return float(s)
-    except ValueError:
-        return None
-
-
-def compact_ws(text: str) -> str:
-    return re.sub(r"\s+", " ", text or "").strip()
+    lang = m.group("lang")
+    query = parse_qs(m.group("query"), keep_blank_values=True)
+    t = (query.get("t") or [""])[0]
+    p = (query.get("p") or [""])[0]
+    title = fallback_title.strip() or f"TUİK download ({t or 'unknown'})"
+    return Record(
+        family=family,
+        source_url=source_url,
+        discovered_via=discovered_via,
+        download_url=download_url,
+        title=title,
+        lang=lang,
+        type_code=t,
+        press_id=press_id_from_url(source_url),
+        query_p=p or None,
+    )
 
 
-def month_name_to_num_tr(month_name: str) -> Optional[int]:
-    mapping = {
-        "ocak": 1,
-        "şubat": 2,
-        "subat": 2,
-        "mart": 3,
-        "nisan": 4,
-        "mayıs": 5,
-        "mayis": 5,
-        "haziran": 6,
-        "temmuz": 7,
-        "ağustos": 8,
-        "agustos": 8,
-        "eylül": 9,
-        "eylul": 9,
-        "ekim": 10,
-        "kasım": 11,
-        "kasim": 11,
-        "aralık": 12,
-        "aralik": 12,
-    }
-    return mapping.get(month_name.lower().strip())
-
-
-def extract_reference_date(text: str) -> str:
-    """
-    Örnek yakalamalar:
-    - Tüketici fiyat endeksi, Şubat 2026
-    - Tüketici Fiyat Endeksi, Mart 2025
-    """
-    patterns = [
-        r"(ocak|şubat|subat|mart|nisan|mayıs|mayis|haziran|temmuz|ağustos|agustos|eylül|eylul|ekim|kasım|kasim|aralık|aralik)\s+(\d{4})",
-        r"(\d{4})\s+(ocak|şubat|subat|mart|nisan|mayıs|mayis|haziran|temmuz|ağustos|agustos|eylül|eylul|ekim|kasım|kasim|aralık|aralik)",
-    ]
-    txt = compact_ws(text).lower()
-
-    for pat in patterns:
-        m = re.search(pat, txt, flags=re.I)
-        if not m:
-            continue
-
-        if pat.startswith("("):
-            month_name, year = m.group(1), m.group(2)
-        else:
-            year, month_name = m.group(1), m.group(2)
-
-        month_num = month_name_to_num_tr(month_name)
-        if month_num:
-            return f"{year}-{month_num:02d}"
-
-    return date.today().strftime("%Y-%m")
-
-
-def dump_debug_files(family_id: str, page_url: str, title: str, html: str, text: str) -> None:
-    safe = re.sub(r"[^a-zA-Z0-9_-]+", "_", family_id)
-    (DEBUG_DIR / f"{safe}_url.txt").write_text(page_url, encoding="utf-8")
-    (DEBUG_DIR / f"{safe}_title.txt").write_text(title, encoding="utf-8")
-    (DEBUG_DIR / f"{safe}_page.html").write_text(html, encoding="utf-8")
-    (DEBUG_DIR / f"{safe}_text.txt").write_text(text, encoding="utf-8")
-
-
-def record(metric: str, value: float, ref_date: str, family: FamilySpec) -> Dict[str, Any]:
-    return {
-        "family_id": family.family_id,
-        "series": family.title,
-        "metric": metric,
-        "value": value,
-        "unit": family.unit,
-        "frequency": family.frequency,
-        "date": ref_date,
-        "source_url": family.url,
-        "source": "TÜİK",
-    }
-
-
-def extract_tufe_records_from_text(text: str, family: FamilySpec) -> List[Dict[str, Any]]:
-    """
-    Basın bülteni metninden en kritik headline göstergeleri çıkarır.
-    Beklenen kalıplar:
-      - bir önceki aya göre % 2,27
-      - bir önceki yılın aralık ayına göre % 7,42
-      - bir önceki yılın aynı ayına göre % 39,05
-      - on iki aylık ortalamalara göre % 53,83
-    """
-    txt = compact_ws(text)
-    ref_date = extract_reference_date(txt)
-
-    metric_patterns = [
-        ("monthly_change", r"bir önceki aya göre\s*%?\s*([\-−–]?\d+[.,]\d+)"),
-        ("december_change", r"bir önceki yılın aralık ayına göre\s*%?\s*([\-−–]?\d+[.,]\d+)"),
-        ("annual_change", r"bir önceki yılın aynı ayına göre\s*%?\s*([\-−–]?\d+[.,]\d+)"),
-        ("twelve_month_avg", r"on iki aylık ortalamalara göre\s*%?\s*([\-−–]?\d+[.,]\d+)"),
-    ]
-
-    out: List[Dict[str, Any]] = []
-    seen = set()
-
-    for metric_name, pat in metric_patterns:
-        m = re.search(pat, txt, flags=re.I)
-        if not m:
-            continue
-        value = tr_number_to_float(m.group(1))
-        if value is None:
-            continue
-        key = (metric_name, ref_date, value)
+def dedupe(records: Iterable[Record]) -> List[Record]:
+    seen: Set[tuple] = set()
+    out: List[Record] = []
+    for rec in records:
+        key = rec.key()
         if key in seen:
             continue
         seen.add(key)
-        out.append(record(metric_name, value, ref_date, family))
-
+        out.append(rec)
     return out
 
 
-def extract_json_candidates_from_html(html: str) -> List[str]:
-    """
-    Bazı SPA'larda script tag içinde hydration/state json kalabilir.
-    Çok agresif parse yerine aday blokları döndürüyoruz.
-    """
-    candidates: List[str] = []
-
-    script_patterns = [
-        r"<script[^>]*>\s*window\.__INITIAL_STATE__\s*=\s*(\{.*?\})\s*;</script>",
-        r"<script[^>]*>\s*window\.__NUXT__\s*=\s*(\{.*?\})\s*;</script>",
-        r"<script[^>]*type=['\"]application/json['\"][^>]*>(.*?)</script>",
-    ]
-
-    for pat in script_patterns:
-        for m in re.finditer(pat, html, flags=re.I | re.S):
-            candidates.append(m.group(1))
-
-    return candidates
-
-
-def extract_tufe_records_from_json_candidates(candidates: List[str], family: FamilySpec) -> List[Dict[str, Any]]:
-    out: List[Dict[str, Any]] = []
-    if not candidates:
-        return out
-
-    for candidate in candidates:
-        try:
-            obj = json.loads(candidate)
-        except Exception:
-            continue
-
-        serialized = json.dumps(obj, ensure_ascii=False)
-        text_records = extract_tufe_records_from_text(serialized, family)
-        if text_records:
-            out.extend(text_records)
-
-    # dedupe
-    deduped = []
-    seen = set()
-    for item in out:
-        key = (item["metric"], item["date"], item["value"])
-        if key in seen:
-            continue
-        seen.add(key)
-        deduped.append(item)
-    return deduped
-
-
-def scrape_family(page, family: FamilySpec) -> Dict[str, Any]:
-    print(f"[INFO] scraping family={family.family_id} url={family.url}")
-
-    try:
-        page.goto(family.url, wait_until="domcontentloaded", timeout=120000)
-        page.wait_for_load_state("networkidle", timeout=120000)
-        page.wait_for_timeout(4000)
-    except PlaywrightTimeoutError:
-        # yine de içerik almayı deneyelim
-        pass
-
-    html = page.content()
-    body_text = ""
-    try:
-        body_text = page.locator("body").inner_text(timeout=30000)
-    except Exception:
-        body_text = ""
-
-    page_title = ""
-    try:
-        page_title = page.title()
-    except Exception:
-        page_title = ""
-
-    # 1) önce HTML içindeki olası hydration/json state'leri tara
-    json_candidates = extract_json_candidates_from_html(html)
-    records = extract_tufe_records_from_json_candidates(json_candidates, family)
-
-    # 2) hala yoksa render edilmiş body text'ten regex fallback
-    if not records:
-        records = extract_tufe_records_from_text(body_text, family)
-
-    # 3) hala yoksa debug dump
-    if not records:
-        dump_debug_files(
-            family_id=family.family_id,
-            page_url=page.url,
-            title=page_title,
-            html=html,
-            text=body_text,
+def discover_download_links_from_html(
+    family: str, url: str, html: str, title_hint: str = ""
+) -> List[Record]:
+    found: List[Record] = []
+    for m in DOWNLOAD_RE.finditer(html or ""):
+        rec = normalize_download_record(
+            family=family,
+            source_url=url,
+            discovered_via="html",
+            download_url=m.group(0),
+            fallback_title=title_hint,
         )
+        if rec:
+            found.append(rec)
 
-    result = {
-        "family_id": family.family_id,
-        "title": family.title,
-        "url": page.url,
-        "page_title": page_title,
-        "record_count": len(records),
-        "records": records,
-    }
+    href_re = re.compile(r'(?:href|src)=["\']([^"\']+)["\']', re.IGNORECASE)
+    for m in href_re.finditer(html or ""):
+        raw = unescape(m.group(1))
+        abs_url = urljoin(url, raw)
+        if "/api/" in abs_url and "/data/downloads" in abs_url:
+            rec = normalize_download_record(
+                family=family,
+                source_url=url,
+                discovered_via="html-attr",
+                download_url=abs_url,
+                fallback_title=title_hint,
+            )
+            if rec:
+                found.append(rec)
 
-    print(f"[INFO] family={family.family_id} extracted_records={len(records)}")
-    return result
+    return dedupe(found)
 
 
-def main() -> int:
-    ensure_dirs()
+def fetch_html(url: str, timeout: int = 30) -> str:
+    resp = requests.get(url, timeout=timeout, headers=HEADERS)
+    resp.raise_for_status()
+    return resp.text
 
-    all_groups: List[Dict[str, Any]] = []
-    ok_family_count = 0
-    failed_family_count = 0
-    total_records = 0
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        context = browser.new_context(locale="tr-TR")
-        page = context.new_page()
+def discover_with_playwright(family: str, url: str) -> List[Record]:
+    try:
+        from playwright.sync_api import sync_playwright
+    except Exception as exc:
+        raise RuntimeError(
+            "Playwright is required for TUİK JS-rendered pages. "
+            "Install with: pip install playwright && playwright install chromium"
+        ) from exc
 
-        for family in FAMILY_SPECS:
+    records: List[Record] = []
+    network_urls: Set[str] = set()
+    title_hint = ""
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        page = browser.new_page(user_agent=USER_AGENT, locale="tr-TR")
+
+        def on_response(response):
             try:
-                result = scrape_family(page, family)
-                all_groups.append(result)
+                u = response.url
+            except Exception:
+                return
+            if "/api/" in u and "/data/downloads" in u:
+                network_urls.add(u)
 
-                if result["record_count"] > 0:
-                    ok_family_count += 1
-                    total_records += result["record_count"]
-                else:
-                    failed_family_count += 1
-            except Exception as exc:
-                failed_family_count += 1
-                err = {
-                    "family_id": family.family_id,
-                    "title": family.title,
-                    "url": family.url,
-                    "record_count": 0,
-                    "records": [],
-                    "error": repr(exc),
-                }
-                all_groups.append(err)
-                print(f"[ERROR] family={family.family_id} error={exc!r}")
+        page.on("response", on_response)
+        page.goto(url, wait_until="domcontentloaded", timeout=90000)
+        page.wait_for_timeout(7000)
 
-        context.close()
+        try:
+            page.wait_for_load_state("networkidle", timeout=15000)
+        except Exception:
+            pass
+
+        try:
+            title_hint = page.title().strip()
+        except Exception:
+            title_hint = ""
+
+        dom_urls: Set[str] = set()
+        for selector in ("a[href]", "[data-href]", "button[onclick]"):
+            try:
+                handles = page.locator(selector)
+                count = min(handles.count(), 500)
+                for i in range(count):
+                    h = handles.nth(i)
+                    for attr in ("href", "data-href", "onclick"):
+                        try:
+                            v = h.get_attribute(attr)
+                        except Exception:
+                            v = None
+                        if not v:
+                            continue
+                        try:
+                            text = h.inner_text(timeout=1000).strip()
+                        except Exception:
+                            text = ""
+                        for match in DOWNLOAD_RE.finditer(v):
+                            rec = normalize_download_record(
+                                family=family,
+                                source_url=url,
+                                discovered_via=f"dom:{attr}",
+                                download_url=match.group(0),
+                                fallback_title=text or title_hint,
+                            )
+                            if rec:
+                                records.append(rec)
+                        if "/api/" in v and "/data/downloads" in v:
+                            dom_urls.add(urljoin(url, v))
+            except Exception:
+                continue
+
+        try:
+            html = page.content()
+            records.extend(discover_download_links_from_html(family, url, html, title_hint))
+        except Exception:
+            pass
+
         browser.close()
 
+    for dl in sorted(network_urls | dom_urls):
+        rec = normalize_download_record(
+            family=family,
+            source_url=url,
+            discovered_via="playwright-network",
+            download_url=dl,
+            fallback_title=title_hint,
+        )
+        if rec:
+            records.append(rec)
+
+    return dedupe(records)
+
+
+def scrape_family(family: str, url: str) -> Dict[str, Any]:
+    result: Dict[str, Any] = {
+        "family": family,
+        "url": url,
+        "records": [],
+        "error": None,
+    }
+    try:
+        html = fetch_html(url)
+        title = extract_title_from_html(html)
+
+        records = discover_download_links_from_html(family, url, html, title)
+        if records:
+            result["records"] = [asdict(r) for r in records]
+            return result
+
+        records = discover_with_playwright(family, url)
+        result["records"] = [asdict(r) for r in records]
+        if not records:
+            result["error"] = (
+                "page was JS shell" if is_js_shell(html)
+                else "no usable download endpoints discovered"
+            )
+        return result
+
+    except Exception as exc:
+        result["error"] = f"{type(exc).__name__}: {exc}"
+        return result
+
+
+def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
+    p = argparse.ArgumentParser()
+    p.add_argument("--family", help="single family name")
+    p.add_argument("--url", help="single metadata URL")
+    p.add_argument(
+        "--config",
+        help=(
+            "JSON file with [{'family': ..., 'url': ...}, ...] or "
+            "{'families': [{'family': ..., 'url': ...}, ...]}"
+        ),
+    )
+    p.add_argument("--output", help="write result JSON to this path")
+    return p.parse_args(argv)
+
+
+def load_jobs(args: argparse.Namespace) -> List[Dict[str, str]]:
+    if args.family and args.url:
+        return [{"family": args.family, "url": args.url}]
+    if args.config:
+        raw = json.loads(Path(args.config).read_text(encoding="utf-8"))
+        if isinstance(raw, dict) and "families" in raw:
+            raw = raw["families"]
+        jobs = []
+        for item in raw:
+            family = item.get("family") or item.get("name")
+            url = item.get("url")
+            if family and url:
+                jobs.append({"family": family, "url": url})
+        return jobs
+    raise SystemExit("Provide either --family/--url or --config")
+
+
+def main(argv: Optional[List[str]] = None) -> int:
+    args = parse_args(argv)
+    jobs = load_jobs(args)
+
+    all_results = []
+    ok = 0
+    failed = 0
+
+    for job in jobs:
+        family = job["family"]
+        url = job["url"]
+        print(f"[INFO] scraping family={family} url={url}", file=sys.stderr)
+        res = scrape_family(family, url)
+        count = len(res["records"])
+        print(f"[INFO] family={family} extracted_records={count}", file=sys.stderr)
+        if count > 0:
+            ok += 1
+        else:
+            failed += 1
+        all_results.append(res)
+
     payload = {
-        "title": "Gökdemir Barometresi",
-        "subtitle": "En riskli sektörler (TÜİK verisi)",
-        "updated_at": date.today().isoformat(),
-        "groups": all_groups,
+        "results": all_results,
+        "total_records": sum(len(r["records"]) for r in all_results),
+        "ok_family_count": ok,
+        "failed_family_count": failed,
     }
 
-    OUTPUT_JSON.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    print(f"[INFO] wrote: {OUTPUT_JSON}")
-    print(f"[INFO] ok_family_count={ok_family_count} failed_family_count={failed_family_count}")
+    data = json.dumps(payload, ensure_ascii=False, indent=2)
 
-    if total_records <= 0:
-        print("Error:  total_records=0 ; scraper no usable data produced", file=sys.stderr)
-        return 2
+    if args.output:
+        out = Path(args.output)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(data, encoding="utf-8")
+        print(f"[INFO] wrote: {out}", file=sys.stderr)
+    else:
+        print(data)
 
-    return 0
+    return 0 if payload["total_records"] > 0 else 2
 
 
 if __name__ == "__main__":

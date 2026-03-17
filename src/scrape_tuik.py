@@ -1,242 +1,651 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+Gökdemir Barometresi - TÜİK veri çekici
+
+Amaç:
+- TÜİK veri portalındaki kırılgan search/discovery adımını tamamen kaldırmak
+- Doğrudan bilinen metadata / press URL'lerinden veri çekmek
+- Önce requests ile denemek, yetmezse Scrapling browser fallback kullanmak
+- Sayfadan tablo / script içeriği / JSON-LD yakalamak
+- Standart bir ara çıktı üretmek: data/tuik_families.json
+
+Beklenen kullanım:
+    python src/scrape_tuik.py
+
+Çevresel değişkenler:
+    TUIK_TIMEOUT=60
+    TUIK_DEBUG=1
+"""
+
+from __future__ import annotations
+
 import json
 import os
 import re
-from datetime import date
+import sys
+import time
+import traceback
+from dataclasses import dataclass, asdict
 from pathlib import Path
+from typing import Any, Dict, List, Optional, Tuple
 
-from playwright.sync_api import sync_playwright
+import requests
+from bs4 import BeautifulSoup
 
-RAW_DIR = Path("data/raw")
-CACHE_DIR = Path("data/cache")
-DEBUG_DIR = Path("data/debug")
+# Scrapling opsiyonel; yoksa sadece requests ile devam eder
+try:
+    from scrapling.fetchers import DynamicFetcher
+    HAS_SCRAPLING = True
+except Exception:
+    HAS_SCRAPLING = False
 
+
+ROOT = Path(__file__).resolve().parents[1]
+DATA_DIR = ROOT / "data"
+RAW_DIR = DATA_DIR / "tuik_raw"
+OUT_FILE = DATA_DIR / "tuik_families.json"
+
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 RAW_DIR.mkdir(parents=True, exist_ok=True)
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
-DEBUG_DIR.mkdir(parents=True, exist_ok=True)
 
-OUT_RAW = RAW_DIR / "tuik_latest.json"
-OUT_CACHE = CACHE_DIR / "tuik_latest.json"
+DEBUG = os.getenv("TUIK_DEBUG", "0") == "1"
+TIMEOUT = int(os.getenv("TUIK_TIMEOUT", "60"))
 
-SEARCHES = [
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+    "AppleWebKit/537.36 (KHTML, like Gecko) "
+    "Chrome/123.0.0.0 Safari/537.36"
+)
+
+HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept-Language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Cache-Control": "no-cache",
+    "Pragma": "no-cache",
+}
+
+
+# -------------------------------------------------------------------
+# CONFIG
+# -------------------------------------------------------------------
+# Burada search URL YOK.
+# Her aile için doğrudan açılabilir URL ver.
+#
+# Şimdilik örnekler:
+# - TÜFE için metadata sayfası daha stabil olabilir.
+# - Gerekirse press URL de kullanılabilir.
+#
+# Not:
+#   url alanlarını sen kendi test edip doğruladığın gerçek URL'lerle değiştir.
+#   Kod discovery yapmadığı için timeout kaynağı olan /tr/search'e gitmez.
+PRESS_SPECS: List[Dict[str, Any]] = [
     {
-        "family": "TUFE",
-        "search_url": "https://veriportali.tuik.gov.tr/tr/search?q=T%C3%BCketici%20Fiyat%20Endeksi",
-        "must_contain": ["Tüketici Fiyat Endeksi"]
+        "key": "tuik_tufe",
+        "title": "Tüketici Fiyat Endeksi",
+        "category": "Makro",
+        "source": "TÜİK",
+        "url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
+        "must_contain_any": [
+            "Tüketici Fiyat Endeksi",
+            "TÜFE",
+        ],
+        "group_rules": [
+            # Örnek eşleme. İleride senin skor modeline göre genişletilir.
+            {"match": ["gıda", "alkolsüz içecekler"], "group": "Gıda ve alkolsüz içecekler"},
+            {"match": ["ulaştırma"], "group": "Ulaştırma"},
+            {"match": ["konut"], "group": "Konut"},
+            {"match": ["lokanta", "oteller"], "group": "Lokanta ve oteller"},
+            {"match": ["çeşitli mal", "hizmet"], "group": "Çeşitli mal ve hizmetler"},
+            {"match": ["eğitim"], "group": "Eğitim"},
+            {"match": ["sağlık"], "group": "Sağlık"},
+            {"match": ["giyim", "ayakkabı"], "group": "Giyim ve ayakkabı"},
+            {"match": ["ev eşyası"], "group": "Ev eşyası"},
+            {"match": ["haberleşme"], "group": "Haberleşme"},
+            {"match": ["eğlence", "kültür"], "group": "Eğlence ve kültür"},
+            {"match": ["alkollü içecekler", "tütün"], "group": "Alkollü içecekler ve tütün"},
+        ],
     },
-    {
-        "family": "HUFE",
-        "search_url": "https://veriportali.tuik.gov.tr/tr/search?q=Hizmet%20%C3%9Cretici%20Fiyat%20Endeksi",
-        "must_contain": ["Hizmet Üretici Fiyat Endeksi"]
-    }
+    # Buraya yeni aileler ekle:
+    # {
+    #     "key": "tuik_yiufe",
+    #     "title": "Yurt İçi Üretici Fiyat Endeksi",
+    #     "category": "Makro",
+    #     "source": "TÜİK",
+    #     "url": "https://veriportali.tuik.gov.tr/tr/press/XXXXX/metadata",
+    #     "must_contain_any": ["Yurt İçi Üretici Fiyat Endeksi", "Yİ-ÜFE"],
+    #     "group_rules": [...]
+    # },
 ]
 
-def tr_float(s: str):
-    s = s.strip().replace("%", "").replace("\u00a0", " ")
-    s = s.replace(".", "").replace(",", ".")
+
+# -------------------------------------------------------------------
+# MODELS
+# -------------------------------------------------------------------
+@dataclass
+class RowRecord:
+    family_key: str
+    family_title: str
+    row_label: str
+    value: Optional[float]
+    raw_value: str
+    unit: Optional[str] = None
+    date_text: Optional[str] = None
+    group: Optional[str] = None
+    sub_group: Optional[str] = None
+    meta: Optional[Dict[str, Any]] = None
+
+
+# -------------------------------------------------------------------
+# UTILS
+# -------------------------------------------------------------------
+def log(*args: Any) -> None:
+    print(*args, flush=True)
+
+
+def debug(*args: Any) -> None:
+    if DEBUG:
+        print("[DEBUG]", *args, flush=True)
+
+
+def save_text(path: Path, content: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+
+
+def save_json(path: Path, obj: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(obj, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def slugify(text: str) -> str:
+    text = text.lower().strip()
+    text = re.sub(r"[^\w\s-]", "", text, flags=re.UNICODE)
+    text = re.sub(r"[\s_-]+", "_", text)
+    return text.strip("_")
+
+
+def normalize_spaces(text: str) -> str:
+    return re.sub(r"\s+", " ", (text or "")).strip()
+
+
+def normalize_tr(text: str) -> str:
+    text = (text or "").strip().lower()
+    rep = str.maketrans("çğıöşüİI", "cgiosuii")
+    text = text.translate(rep)
+    text = normalize_spaces(text)
+    return text
+
+
+def parse_float_maybe(text: str) -> Optional[float]:
+    if text is None:
+        return None
+    s = normalize_spaces(str(text))
+    if not s:
+        return None
+
+    # yüzde, puan, sayı vb. ayıklamaya çalış
+    s = s.replace("%", "").replace("−", "-").replace("–", "-")
+    s = s.replace("\xa0", " ")
+
+    # Türkçe sayı formatı: 1.234,56
+    # Önce saf sayı/desen çıkar
+    m = re.search(r"[-+]?\d[\d\.\,]*", s)
+    if not m:
+        return None
+
+    num = m.group(0)
+
+    # hem . hem , varsa Türkçe kabul et
+    if "." in num and "," in num:
+        num = num.replace(".", "").replace(",", ".")
+    # sadece , varsa ondalık kabul et
+    elif "," in num and "." not in num:
+        num = num.replace(",", ".")
+    # sadece . varsa bırak
     try:
-        return float(s)
+        return float(num)
     except Exception:
         return None
 
-def normalize(s: str) -> str:
-    return re.sub(r"\s+", " ", (s or "")).strip()
 
-def group_of(name: str) -> str:
-    n = name.lower()
-    if "eğitim" in n or "öğretim" in n or "okul" in n:
-        return "Eğitim"
-    if "hukuk" in n or "muhasebe" in n or "denetim" in n:
-        return "Hukuk ve Muhasebe Hizmetleri"
-    if "sağlık" in n or "tedavi" in n or "diş" in n or "hastane" in n:
-        return "Sağlık Hizmetleri"
-    if "lokanta" in n or "otel" in n or "restoran" in n or "kafe" in n or "konaklama" in n:
-        return "Lokanta ve Oteller"
-    if "ulaştır" in n or "taşıma" in n or "taşımacılık" in n or "depolama" in n:
-        return "Ulaştırma"
-    if "iletişim" in n or "telekom" in n or "internet" in n or "mobil" in n:
-        return "Telekom"
-    if "gayrimenkul" in n or "emlak" in n or "kira" in n:
-        return "Gayrimenkul Hizmetleri"
-    if "sigorta" in n or "finans" in n or "banka" in n:
-        return "Finansal Hizmetler"
-    if "yayın" in n or "medya" in n or "video" in n or "sinema" in n or "televizyon" in n:
-        return "Medya ve Yayıncılık"
-    if "temizlik" in n or "güvenlik" in n or "destek" in n or "çağrı merkezi" in n:
-        return "Destek Hizmetleri"
-    return "Diğer Hizmetler"
-
-def discover_latest_press_url(page, search_url: str, must_contain):
-    page.goto(search_url, wait_until="domcontentloaded", timeout=60000)
-    page.wait_for_timeout(5000)
-
-    # debug
-    DEBUG_DIR.mkdir(parents=True, exist_ok=True)
-    (DEBUG_DIR / "search.html").write_text(page.content(), encoding="utf-8")
-
-    links = page.locator("a[href*='/press/']")
-    count = links.count()
-    candidates = []
-
-    for i in range(count):
-        href = links.nth(i).get_attribute("href")
-        text = normalize(links.nth(i).inner_text(timeout=2000))
-        if not href:
-            continue
-        if "/press/" not in href:
-            continue
-        if href.startswith("/"):
-            href = "https://veriportali.tuik.gov.tr" + href
-        candidates.append((href, text))
-
-    # önce anahtar kelime eşleşen ilk adayı seç
-    for href, text in candidates:
-        if all(x.lower() in text.lower() for x in must_contain[:1]):
-            return href
-
-    if candidates:
-        return candidates[0][0]
-
-    raise RuntimeError("Press link bulunamadı")
-
-def extract_benchmark_from_text(text: str):
-    text = normalize(text)
-
-    patterns = [
-        r"yıllık\s+([0-9]+(?:[.,][0-9]+)?)",
-        r"bir önceki yılın aynı ayına göre\s+%?([0-9]+(?:[.,][0-9]+)?)",
-        r"yıllık değişim oranı\s+%?([0-9]+(?:[.,][0-9]+)?)"
-    ]
-
-    for p in patterns:
-        m = re.search(p, text, flags=re.IGNORECASE)
-        if m:
-            val = tr_float(m.group(1))
-            if val is not None:
-                return val
-
+def detect_unit(text: str) -> Optional[str]:
+    t = (text or "").lower()
+    if "%" in t or "yüzde" in t:
+        return "%"
+    if "puan" in t:
+        return "puan"
+    if "endeks" in t:
+        return "endeks"
     return None
 
-def extract_rows_from_tables(page, family: str, benchmark_yoy: float):
-    items = []
 
-    tables = page.locator("table")
-    table_count = tables.count()
+# -------------------------------------------------------------------
+# FETCH
+# -------------------------------------------------------------------
+def fetch_with_requests(url: str) -> Tuple[Optional[str], Dict[str, Any]]:
+    meta: Dict[str, Any] = {"method": "requests", "ok": False, "url": url}
+    try:
+        r = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+        meta["status_code"] = r.status_code
+        meta["final_url"] = str(r.url)
+        meta["content_type"] = r.headers.get("Content-Type")
+        meta["length"] = len(r.text or "")
+        if r.ok and r.text:
+            meta["ok"] = True
+            return r.text, meta
+        return None, meta
+    except Exception as e:
+        meta["error"] = repr(e)
+        return None, meta
 
-    for t in range(table_count):
-        rows = tables.nth(t).locator("tr")
-        row_count = rows.count()
 
-        for r in range(row_count):
-            cells = rows.nth(r).locator("th, td")
-            vals = []
-            for c in range(cells.count()):
-                vals.append(normalize(cells.nth(c).inner_text(timeout=1000)))
+def fetch_with_scrapling(url: str) -> Tuple[Optional[str], Dict[str, Any]]:
+    meta: Dict[str, Any] = {"method": "scrapling", "ok": False, "url": url}
+    if not HAS_SCRAPLING:
+        meta["error"] = "Scrapling not installed"
+        return None, meta
 
-            vals = [v for v in vals if v]
-            if len(vals) < 2:
-                continue
+    try:
+        page = DynamicFetcher.fetch(
+            url,
+            disable_resources=True,
+            timeout=TIMEOUT * 1000,
+            network_idle=False,
+        )
+        html = getattr(page, "html", None)
+        status = getattr(page, "status", None)
+        meta["status_code"] = status
+        meta["length"] = len(html or "")
+        meta["ok"] = bool(html)
+        return html, meta
+    except Exception as e:
+        meta["error"] = repr(e)
+        return None, meta
 
-            name = vals[0]
-            low = name.lower()
 
-            if low in {"genel", "toplam"}:
-                continue
-            if "değişim" in low and "oran" in low:
-                continue
-            if len(name) < 3:
-                continue
+def fetch_html(url: str, key: str) -> Tuple[Optional[str], Dict[str, Any]]:
+    req_html, req_meta = fetch_with_requests(url)
+    save_json(RAW_DIR / f"{key}_fetch_requests_meta.json", req_meta)
 
-            yoy = None
+    if req_html and len(req_html) > 800:
+        save_text(RAW_DIR / f"{key}_requests.html", req_html)
+        return req_html, req_meta
 
-            # sağdan sola yüzdelik hücre ara
-            for v in reversed(vals[1:]):
-                vv = tr_float(v)
-                if vv is not None:
-                    yoy = vv
-                    break
+    scr_html, scr_meta = fetch_with_scrapling(url)
+    save_json(RAW_DIR / f"{key}_fetch_scrapling_meta.json", scr_meta)
 
-            if yoy is None:
-                continue
+    if scr_html:
+        save_text(RAW_DIR / f"{key}_scrapling.html", scr_html)
+        return scr_html, scr_meta
 
-            items.append({
-                "family": family,
-                "group": group_of(name),
-                "name": name,
-                "yoy": yoy,
-                "benchmark_yoy": benchmark_yoy
-            })
-
-    # tekrarları temizle
-    uniq = {}
-    for x in items:
-        key = (x["family"], x["name"])
-        if key not in uniq:
-            uniq[key] = x
-
-    return list(uniq.values())
-
-def scrape_family(page, spec):
-    url = discover_latest_press_url(page, spec["search_url"], spec["must_contain"])
-    page.goto(url, wait_until="domcontentloaded", timeout=60000)
-    page.wait_for_timeout(5000)
-
-    html = page.content()
-    text = normalize(page.locator("body").inner_text(timeout=15000))
-
-    (DEBUG_DIR / f"{spec['family'].lower()}_page.html").write_text(html, encoding="utf-8")
-    (DEBUG_DIR / f"{spec['family'].lower()}_text.txt").write_text(text, encoding="utf-8")
-
-    benchmark_yoy = extract_benchmark_from_text(text)
-    if benchmark_yoy is None:
-        raise RuntimeError(f"{spec['family']} benchmark bulunamadı: {url}")
-
-    items = extract_rows_from_tables(page, spec["family"], benchmark_yoy)
-
-    # hiç tablo parse edilemediyse hard fail
-    if not items:
-        raise RuntimeError(f"{spec['family']} için tablo parse edilemedi: {url}")
-
-    return {
-        "family": spec["family"],
+    return None, {
+        "ok": False,
         "url": url,
-        "benchmark_yoy": benchmark_yoy,
-        "items": items
+        "requests": req_meta,
+        "scrapling": scr_meta,
     }
 
-def main():
-    with sync_playwright() as p:
-        browser = p.chromium.launch(headless=True)
-        page = browser.new_page()
 
-        families = []
-        all_items = []
+# -------------------------------------------------------------------
+# PARSE
+# -------------------------------------------------------------------
+def extract_json_ld(soup: BeautifulSoup) -> List[Dict[str, Any]]:
+    items: List[Dict[str, Any]] = []
+    for tag in soup.find_all("script", attrs={"type": "application/ld+json"}):
+        raw = (tag.string or tag.get_text() or "").strip()
+        if not raw:
+            continue
+        try:
+            parsed = json.loads(raw)
+            if isinstance(parsed, list):
+                items.extend(x for x in parsed if isinstance(x, dict))
+            elif isinstance(parsed, dict):
+                items.append(parsed)
+        except Exception:
+            continue
+    return items
 
-        for spec in SEARCHES:
-            result = scrape_family(page, spec)
-            families.append({
-                "family": result["family"],
-                "url": result["url"],
-                "benchmark_yoy": result["benchmark_yoy"]
-            })
-            all_items.extend(result["items"])
 
-        if not all_items:
-            raise RuntimeError("Hiç veri çıkarılamadı")
+def extract_candidate_tables(soup: BeautifulSoup) -> List[List[List[str]]]:
+    """
+    HTML tablolarını 2D string array'e çevirir.
+    """
+    tables: List[List[List[str]]] = []
+    for table in soup.find_all("table"):
+        rows: List[List[str]] = []
+        for tr in table.find_all("tr"):
+            cells = tr.find_all(["th", "td"])
+            row = [normalize_spaces(c.get_text(" ", strip=True)) for c in cells]
+            if any(cell for cell in row):
+                rows.append(row)
+        if rows:
+            tables.append(rows)
+    return tables
 
-        payload = {
-            "updated_at": str(date.today()),
-            "families": families,
-            "items": all_items
+
+def extract_script_blobs(soup: BeautifulSoup) -> List[str]:
+    blobs: List[str] = []
+    for tag in soup.find_all("script"):
+        txt = tag.string or tag.get_text() or ""
+        txt = txt.strip()
+        if len(txt) > 100:
+            blobs.append(txt)
+    return blobs
+
+
+def table_to_records(
+    table: List[List[str]],
+    family_key: str,
+    family_title: str,
+    group_rules: List[Dict[str, Any]],
+) -> List[RowRecord]:
+    """
+    Basit heuristik:
+    - ilk sütun etiket
+    - diğer sütunlarda ilk parse edilebilen numerik değeri al
+    """
+    out: List[RowRecord] = []
+
+    for row in table:
+        if len(row) < 2:
+            continue
+
+        label = normalize_spaces(row[0])
+        if not label:
+            continue
+
+        # header satırlarını ele
+        if label.lower() in {"madde", "grup", "alt grup", "ana harcama grubu", "açıklama"}:
+            continue
+
+        chosen_value = None
+        chosen_raw = ""
+        for cell in row[1:]:
+            val = parse_float_maybe(cell)
+            if val is not None:
+                chosen_value = val
+                chosen_raw = cell
+                break
+
+        if chosen_value is None:
+            continue
+
+        group = infer_group(label, group_rules)
+
+        out.append(
+            RowRecord(
+                family_key=family_key,
+                family_title=family_title,
+                row_label=label,
+                value=chosen_value,
+                raw_value=chosen_raw,
+                unit=detect_unit(chosen_raw),
+                date_text=None,
+                group=group,
+                sub_group=label if group and group != label else None,
+                meta={"source": "html_table"},
+            )
+        )
+
+    return out
+
+
+def infer_group(label: str, group_rules: List[Dict[str, Any]]) -> Optional[str]:
+    nl = normalize_tr(label)
+    for rule in group_rules:
+        tokens = [normalize_tr(x) for x in rule.get("match", [])]
+        if all(tok in nl for tok in tokens):
+            return rule["group"]
+    return None
+
+
+def extract_records_from_html(spec: Dict[str, Any], html: str) -> Tuple[List[RowRecord], Dict[str, Any]]:
+    soup = BeautifulSoup(html, "html.parser")
+
+    page_text = normalize_spaces(soup.get_text(" ", strip=True))
+    page_title = normalize_spaces(soup.title.get_text(" ", strip=True)) if soup.title else ""
+
+    tables = extract_candidate_tables(soup)
+    json_ld = extract_json_ld(soup)
+    script_blobs = extract_script_blobs(soup)
+
+    parse_meta: Dict[str, Any] = {
+        "page_title": page_title,
+        "text_length": len(page_text),
+        "table_count": len(tables),
+        "json_ld_count": len(json_ld),
+        "script_blob_count": len(script_blobs),
+    }
+
+    # İçerik doğrulama
+    must = spec.get("must_contain_any") or []
+    if must and not any(m.lower() in page_text.lower() for m in must):
+        parse_meta["must_contain_warning"] = {
+            "expected_any": must,
+            "sample_title": page_title,
         }
 
-        with open(OUT_RAW, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
+    all_records: List[RowRecord] = []
 
-        with open(OUT_CACHE, "w", encoding="utf-8") as f:
-            json.dump(payload, f, ensure_ascii=False, indent=2)
+    # 1) Önce gerçek HTML tablo dene
+    for table in tables:
+        recs = table_to_records(table, spec["key"], spec["title"], spec.get("group_rules", []))
+        if recs:
+            all_records.extend(recs)
 
-        browser.close()
-        print(f"OK: {len(all_items)} satır kaydedildi")
+    # 2) Tablodan bir şey çıkmadıysa script blob içinden label:value benzeri desen avla
+    if not all_records:
+        all_records.extend(
+            heuristic_extract_from_scripts(
+                family_key=spec["key"],
+                family_title=spec["title"],
+                group_rules=spec.get("group_rules", []),
+                script_blobs=script_blobs,
+            )
+        )
+
+    # Tekilleştirme
+    uniq: Dict[Tuple[str, Optional[str], Optional[float]], RowRecord] = {}
+    for r in all_records:
+        k = (r.row_label, r.group, r.value)
+        uniq[k] = r
+
+    final_records = list(uniq.values())
+    parse_meta["record_count"] = len(final_records)
+
+    return final_records, parse_meta
+
+
+def heuristic_extract_from_scripts(
+    family_key: str,
+    family_title: str,
+    group_rules: List[Dict[str, Any]],
+    script_blobs: List[str],
+) -> List[RowRecord]:
+    """
+    Çok kaba ama debug aşamasında faydalı fallback.
+    Script içinde:
+      "label":"Ulaştırma", "value":"123,45"
+    benzeri pattern'leri arar.
+    """
+    out: List[RowRecord] = []
+
+    label_patterns = [
+        r'"label"\s*:\s*"([^"]+)"',
+        r'"name"\s*:\s*"([^"]+)"',
+        r'"group"\s*:\s*"([^"]+)"',
+        r'"title"\s*:\s*"([^"]+)"',
+    ]
+    value_patterns = [
+        r'"value"\s*:\s*"?(?:-?\d[\d\.,]*)"?',
+        r'"y"\s*:\s*"?(?:-?\d[\d\.,]*)"?',
+        r'"amount"\s*:\s*"?(?:-?\d[\d\.,]*)"?',
+    ]
+
+    for blob in script_blobs:
+        labels: List[str] = []
+        values: List[str] = []
+
+        for pat in label_patterns:
+            labels.extend(re.findall(pat, blob, flags=re.IGNORECASE))
+
+        for pat in value_patterns:
+            vals = re.findall(pat, blob, flags=re.IGNORECASE)
+            if vals:
+                values.extend(vals)
+
+        # Yukarıdaki value regex'i tam grup döndürmüyorsa ikinci bir genel tarama yap
+        if not values:
+            values.extend(re.findall(r'"(?:value|y|amount)"\s*:\s*"([^"]+)"', blob, flags=re.IGNORECASE))
+
+        pairs = min(len(labels), len(values))
+        for i in range(pairs):
+            label = normalize_spaces(labels[i])
+            raw_value = normalize_spaces(values[i])
+            value = parse_float_maybe(raw_value)
+            if not label or value is None:
+                continue
+
+            group = infer_group(label, group_rules)
+            out.append(
+                RowRecord(
+                    family_key=family_key,
+                    family_title=family_title,
+                    row_label=label,
+                    value=value,
+                    raw_value=raw_value,
+                    unit=detect_unit(raw_value),
+                    group=group,
+                    sub_group=label if group and group != label else None,
+                    meta={"source": "script_heuristic"},
+                )
+            )
+
+    return out
+
+
+# -------------------------------------------------------------------
+# MAIN
+# -------------------------------------------------------------------
+def scrape_family(spec: Dict[str, Any]) -> Dict[str, Any]:
+    key = spec["key"]
+    url = spec["url"]
+
+    log(f"[INFO] scraping family={key} url={url}")
+
+    html, fetch_meta = fetch_html(url, key)
+    if not html:
+        return {
+            "key": key,
+            "title": spec["title"],
+            "category": spec.get("category"),
+            "source": spec.get("source"),
+            "url": url,
+            "ok": False,
+            "error": "fetch_failed",
+            "fetch_meta": fetch_meta,
+            "records": [],
+            "groups": [],
+        }
+
+    records, parse_meta = extract_records_from_html(spec, html)
+
+    # Group özet üret
+    grouped: Dict[str, List[RowRecord]] = {}
+    for r in records:
+        g = r.group or "Diğer"
+        grouped.setdefault(g, []).append(r)
+
+    groups: List[Dict[str, Any]] = []
+    for group_name, items in sorted(grouped.items(), key=lambda x: x[0]):
+        groups.append(
+            {
+                "name": group_name,
+                "count": len(items),
+                "items": [asdict(x) for x in items],
+            }
+        )
+
+    ok = len(records) > 0
+
+    return {
+        "key": key,
+        "title": spec["title"],
+        "category": spec.get("category"),
+        "source": spec.get("source"),
+        "url": url,
+        "ok": ok,
+        "fetch_meta": fetch_meta,
+        "parse_meta": parse_meta,
+        "record_count": len(records),
+        "records": [asdict(x) for x in records],
+        "groups": groups,
+    }
+
+
+def main() -> None:
+    started = time.time()
+
+    results: List[Dict[str, Any]] = []
+    failures: List[Dict[str, Any]] = []
+
+    for spec in PRESS_SPECS:
+        try:
+            family = scrape_family(spec)
+            results.append(family)
+            if not family.get("ok"):
+                failures.append(
+                    {
+                        "key": family["key"],
+                        "error": family.get("error", "no_records"),
+                        "url": family.get("url"),
+                    }
+                )
+        except Exception as e:
+            failures.append(
+                {
+                    "key": spec.get("key"),
+                    "error": repr(e),
+                    "traceback": traceback.format_exc(),
+                }
+            )
+            results.append(
+                {
+                    "key": spec.get("key"),
+                    "title": spec.get("title"),
+                    "category": spec.get("category"),
+                    "source": spec.get("source"),
+                    "url": spec.get("url"),
+                    "ok": False,
+                    "error": repr(e),
+                    "records": [],
+                    "groups": [],
+                }
+            )
+
+    output = {
+        "generated_at_epoch": int(time.time()),
+        "duration_sec": round(time.time() - started, 2),
+        "ok_family_count": sum(1 for x in results if x.get("ok")),
+        "failed_family_count": sum(1 for x in results if not x.get("ok")),
+        "families": results,
+        "failures": failures,
+    }
+
+    save_json(OUT_FILE, output)
+
+    log(f"[INFO] wrote: {OUT_FILE}")
+    log(f"[INFO] ok_family_count={output['ok_family_count']} failed_family_count={output['failed_family_count']}")
+
+    # Hiç veri yoksa hard-fail etsin ki sessiz bozulma olmasın
+    total_records = sum(x.get("record_count", 0) for x in results if isinstance(x, dict))
+    if total_records == 0:
+        log("[ERROR] total_records=0 ; scraper no usable data produced")
+        sys.exit(2)
+
 
 if __name__ == "__main__":
     main()

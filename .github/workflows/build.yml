@@ -22,13 +22,14 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Build data
-        run: python src/build.py
+      - name: Build tree data
+        run: python src/build_tree.py
 
       - name: Commit generated files
         run: |
           git config user.name "github-actions"
           git config user.email "actions@github.com"
           git add docs/data.json
-          git diff --cached --quiet || git commit -m "Update generated data"
+          git diff --cached --quiet || git commit -m "Update hierarchical barometer data"
+          git push
           git push

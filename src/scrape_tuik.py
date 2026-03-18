@@ -339,10 +339,14 @@ def discover_latest_press_url(discover_url: str, must_contain: str) -> Optional[
 
 
 def _find_press_link_in_html(html: str, base_url: str, must_contain: str) -> Optional[str]:
-    href_re = re.compile(r'href=["\']([^"\']+/press/\d+/metadata[^"\']*)["\']', re.IGNORECASE)
+    # Match both /press/123/metadata and /press/123 (without /metadata)
+    href_re = re.compile(r'href=["\']([^"\']+/press/\d+(?:/metadata)?[^"\']*)["\']', re.IGNORECASE)
     candidates = []
     for m in href_re.finditer(html):
-        abs_url = urljoin(base_url, unescape(m.group(1)))
+        raw_url = unescape(m.group(1))
+        abs_url = urljoin(base_url, raw_url)
+        # Normalise: ensure /metadata suffix
+        abs_url = re.sub(r'(/press/\d+)(?!/metadata)(/|$)', r'\1/metadata\2', abs_url)
         start = max(0, m.start() - 500)
         end = min(len(html), m.end() + 500)
         context = html[start:end]
@@ -356,15 +360,73 @@ def _find_press_link_in_html(html: str, base_url: str, must_contain: str) -> Opt
     return None
 
 
+def _extract_press_id_from_json(data: Any, must_contain: str) -> Optional[int]:
+    """
+    TÜİK API JSON yanıtından en yüksek press ID'yi çıkar.
+    must_contain boşsa veya eşleşme yoksa saf en-yüksek-ID döndürür.
+    """
+    candidates: List[int] = []
+
+    def _walk(obj: Any) -> None:
+        if isinstance(obj, dict):
+            # press/id alanı var mı?
+            for key in ("id", "pressId", "press_id", "Id"):
+                val = obj.get(key)
+                if isinstance(val, int) and val > 10000:
+                    title = str(
+                        obj.get("title") or obj.get("name") or
+                        obj.get("baslik") or obj.get("adi") or ""
+                    )
+                    if not must_contain or must_contain.lower() in title.lower():
+                        candidates.append(val)
+            for v in obj.values():
+                _walk(v)
+        elif isinstance(obj, list):
+            for item in obj:
+                _walk(item)
+
+    _walk(data)
+    return max(candidates) if candidates else None
+
+
+# API endpoint patterns to watch during category page load
+_API_PRESS_LIST_RE = re.compile(
+    r"/api/(?:tr|en)/(?:press(?:es)?|bulten|release)s?",
+    re.IGNORECASE,
+)
+
+
 def _discover_with_playwright(discover_url: str, must_contain: str) -> Optional[str]:
     from playwright.sync_api import sync_playwright
 
     log("Playwright ile kategori sayfası render ediliyor...")
     found_url: Optional[str] = None
+    api_press_ids: List[int] = []
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
-        page = browser.new_page(user_agent=USER_AGENT, locale="tr-TR")
+        context = browser.new_context(user_agent=USER_AGENT, locale="tr-TR")
+        page = context.new_page()
+
+        # Intercept API responses that may return press/bulletin lists
+        def on_response(resp):
+            try:
+                url = resp.url
+            except Exception:
+                return
+            if not _API_PRESS_LIST_RE.search(url):
+                return
+            try:
+                body = resp.json()
+                pid = _extract_press_id_from_json(body, must_contain)
+                if pid:
+                    api_press_ids.append(pid)
+                    log(f"API yanıtından press ID bulundu: {pid} ← {url}")
+            except Exception:
+                pass
+
+        page.on("response", on_response)
+
         page.goto(discover_url, wait_until="domcontentloaded", timeout=60000)
         try:
             page.wait_for_load_state("networkidle", timeout=15000)
@@ -382,13 +444,23 @@ def _discover_with_playwright(discover_url: str, must_contain: str) -> Optional[
                     text = anchor.inner_text(timeout=500)
                     if must_contain.lower() in text.lower():
                         abs_url = urljoin(discover_url, href)
-                        if "/metadata" in abs_url:
-                            pid = press_id_from_url(abs_url)
-                            if pid:
-                                found_url = abs_url
-                                break
+                        # Normalise: ensure /metadata suffix
+                        abs_url = re.sub(
+                            r'(/press/\d+)(?!/metadata)(/|$)', r'\1/metadata\2', abs_url
+                        )
+                        pid = press_id_from_url(abs_url)
+                        if pid:
+                            found_url = abs_url
+                            break
                 except Exception:
                     continue
+
+        # Fallback: use highest press ID captured from API responses
+        if not found_url and api_press_ids:
+            best_id = max(api_press_ids)
+            base = discover_url.split("/tr/")[0] if "/tr/" in discover_url else discover_url
+            found_url = f"{base}/tr/press/{best_id}/metadata"
+            log(f"API press ID'den URL oluşturuldu: {found_url}")
 
         browser.close()
 
@@ -605,7 +677,8 @@ def main(argv=None) -> int:
         family = job.get("family", "unknown")
         label = job.get("label", family)
 
-        press_url = job.get("url") or job.get("fallback_url")
+        # Explicit URL overrides everything; otherwise always try discovery first.
+        press_url: Optional[str] = job.get("url") or None
         discover_url = job.get("discover_url")
 
         if not press_url and discover_url:
@@ -614,6 +687,8 @@ def main(argv=None) -> int:
             if not press_url and job.get("fallback_url"):
                 press_url = job["fallback_url"]
                 warn(f"Keşif başarısız, fallback kullanılıyor: {press_url}")
+        elif not press_url:
+            press_url = job.get("fallback_url") or None
 
         if not press_url:
             log(f"[ATLA] {family}: press URL bulunamadı")

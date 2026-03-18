@@ -1,12 +1,16 @@
 {
-  "scraped_at": "2026-03-18T09:56:32",
+  "scraped_at": "2026-03-18T10:08:54",
   "total_sectors": 0,
   "families": [
     {
       "family": "tuik_tufe",
       "label": "TÜFE Ana Gruplar",
-      "error": "press_url bulunamadı",
-      "sectors": []
+      "press_id": "58287",
+      "date": "2026-03",
+      "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
+      "download_url": null,
+      "sectors": [],
+      "error": "Playwright başarısız: No module named 'playwright'"
     }
   ]
 }

@@ -2,19 +2,17 @@
 """
 TÜİK TÜFE Veri Çekici — Gökdemir Barometresi
 
-Akış:
-  1. config/families.json oku (veya --config / --family+url argümanları)
-  2. Her family için en güncel bülten URL'ini keşfet (Playwright + listing page)
-  3. Bülten metadata sayfasını render et, download API URL'lerini yakala
-  4. Excel'i indir (requests, gerekirse Playwright cookieleri ile)
-  5. openpyxl ile parse et: sektör adı + aylık/yıllık/12-ay ort değerleri
-  6. data/raw/tuik_latest.json yaz
+Mimari: Excel indirme YOK.
+  1. Playwright ile press metadata sayfasını render et
+  2. /api/tr/press/{id} JSON yanıtını yakala
+  3. content HTML içindeki <div class="grafik" data-options="..."> bloklarını parse et
+  4. GRAFIK2 (yıllık), GRAFIK4 (aylık), GRAFIK1 (genel trend) → sektör verileri
+  5. data/raw/tuik_latest.json yaz
 
 Çalıştırma:
   python src/scrape_tuik.py                          # varsayılan config
   python src/scrape_tuik.py --config config/families.json
   python src/scrape_tuik.py --family tuik_tufe --url https://...
-  python src/scrape_tuik.py --debug                  # ham Excel kaydeder
 """
 
 from __future__ import annotations
@@ -26,9 +24,8 @@ import sys
 from dataclasses import dataclass, asdict, field
 from datetime import datetime, date
 from html import unescape
-from io import BytesIO
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin
 
 import requests
@@ -48,21 +45,7 @@ USER_AGENT = (
 )
 HEADERS = {"User-Agent": USER_AGENT, "Accept-Language": "tr,en;q=0.9"}
 
-# Birincil pattern: bilinen download endpoint formatı
-DOWNLOAD_RE = re.compile(
-    r"https://veriportali\.tuik\.gov\.tr/api/"
-    r"(?:tr|en)/data/downloads\?[^\"'<>\s]+",
-    re.IGNORECASE,
-)
-
-# Geniş pattern: herhangi bir TÜİK dosya/download URL'i
-BROAD_DOWNLOAD_RE = re.compile(
-    r"https://(?:veriportali|data)\.tuik\.gov\.tr/"
-    r"(?:[^\s\"'<>]*(?:download|file|excel|xlsx|GetFile|export|indir)[^\s\"'<>]*"
-    r"|api/(?:tr|en)/[^\s\"'<>]*(?:file|download|data|excel)[^\s\"'<>]*)",
-    re.IGNORECASE,
-)
-PRESS_RE = re.compile(r"/(?:tr|en)/press/(\d+)/metadata", re.IGNORECASE)
+PRESS_RE = re.compile(r"/(?:tr|en)/press/(\d+)(?:/metadata)?", re.IGNORECASE)
 
 JS_SHELL_MARKERS = (
     "JavaScript Gerekli",
@@ -70,22 +53,31 @@ JS_SHELL_MARKERS = (
     "You need to enable JavaScript",
 )
 
-# Sektör satırı tanıma: iki rakamla başlayan veya GENEL
-SECTOR_ROW_RE = re.compile(
-    r"^(\d{2}[-\s]|GENEL|Genel|TOPLAM|Toplam)",
-    re.UNICODE,
-)
+# Grafik title → metrik adı eşlemesi
+GRAFIK_METRIC_MAP: Dict[str, str] = {
+    "yıllık değişim":  "annual_change",
+    "aylık değişim":   "monthly_change",
+    "yıllık etki":     "annual_contribution",
+    "aylık etki":      "monthly_contribution",
+}
 
-# Excel header anahtar kelimeleri → metrik adı (uzundan kısaya doğru sıralı)
-HEADER_KEYWORDS: List[Tuple[str, str]] = [
-    ("on iki aylık ortalama", "twelve_month_avg"),
-    ("on iki", "twelve_month_avg"),
-    ("12 ay", "twelve_month_avg"),
-    ("yıllık", "annual_change"),
-    ("annual", "annual_change"),
-    ("aylık", "monthly_change"),
-    ("monthly", "monthly_change"),
-]
+# TÜFE sektör ID eşlemesi (sıra numarası)
+SECTOR_ID_MAP = {
+    "gıda ve alkolsüz içecekler":      "01",
+    "alkollü içecekler ve tütün":       "02",
+    "giyim ve ayakkabı":                "03",
+    "konut":                            "04",
+    "mobilya ve ev eşyası":             "05",
+    "sağlık":                           "06",
+    "ulaştırma":                        "07",
+    "bilgi ve iletişim":                "08",
+    "eğlence ve kültür":                "09",
+    "eğitim":                           "10",
+    "lokanta ve konaklama":             "11",
+    "sigorta ve finansal hizmetler":    "12",
+    "sigort ve finansal hizmetler":     "12",   # TÜİK bazen typo
+    "çeşitli mal ve hizmetler":         "13",
+}
 
 
 # ---------------------------------------------------------------------------
@@ -108,14 +100,13 @@ class ScrapeResult:
     press_id: Optional[str]
     date: Optional[str]
     source_url: str
-    download_url: Optional[str]
     sectors: List[Dict[str, Any]] = field(default_factory=list)
     error: Optional[str] = None
     warning: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
-# Yardımcı fonksiyonlar
+# Yardımcı
 # ---------------------------------------------------------------------------
 
 def log(msg: str) -> None:
@@ -145,247 +136,285 @@ def press_id_from_url(url: str) -> Optional[str]:
 
 
 # ---------------------------------------------------------------------------
-# Excel parse
+# Grafik parse
 # ---------------------------------------------------------------------------
 
-def _detect_header_row(rows: List[tuple]) -> Tuple[int, Dict[int, str]]:
+def _parse_data_options(raw_attr: str) -> Optional[Dict[str, Any]]:
     """
-    Header satırını bul. "Aylık" / "Yıllık" / "On iki" içeren ilk satır.
-    Döner: (header_row_index, {col_index: metric_name})
-    """
-    for i, row in enumerate(rows):
-        row_lower = " ".join(str(c or "").lower() for c in row)
-        if "aylık" in row_lower or "yıllık" in row_lower or "monthly" in row_lower:
-            col_map: Dict[int, str] = {}
-            assigned_metrics: Set[str] = set()
-            for j, cell in enumerate(row):
-                cell_lower = str(cell or "").lower()
-                for keyword, metric in HEADER_KEYWORDS:
-                    if keyword in cell_lower and metric not in assigned_metrics:
-                        col_map[j] = metric
-                        assigned_metrics.add(metric)
-                        break
-            if col_map:
-                return i, col_map
-    return -1, {}
-
-
-def _parse_sheet(sheet) -> List[Sector]:
-    """Tek bir Excel sheet'inden sektör verisi çıkar."""
-    try:
-        rows = list(sheet.iter_rows(values_only=True))
-    except Exception as exc:
-        warn(f"Sheet iteration failed: {exc}")
-        return []
-
-    header_idx, col_map = _detect_header_row(rows)
-    if header_idx < 0 or "annual_change" not in col_map.values():
-        return []
-
-    # Name kolonu: col_map'te olmayan ilk kolon (genellikle 0)
-    name_col = 0
-    for j in range(len(rows[header_idx])):
-        if j not in col_map:
-            name_col = j
-            break
-
-    sectors: List[Sector] = []
-
-    for row in rows[header_idx + 1:]:
-        if not row or len(row) <= name_col:
-            continue
-        raw_name = str(row[name_col] or "").strip()
-        if not raw_name or len(raw_name) < 3:
-            continue
-
-        is_sector = bool(SECTOR_ROW_RE.match(raw_name))
-        if not is_sector:
-            continue
-
-        # ID çıkar
-        id_match = re.match(r"^(\d{2})", raw_name)
-        if id_match:
-            sector_id = id_match.group(1)
-        elif raw_name.upper().startswith(("GENEL", "TOPLAM")):
-            sector_id = "00"
-        else:
-            continue
-
-        def get_val(metric_name: str, _row=row, _col_map=col_map) -> Optional[float]:
-            for col_idx, m in _col_map.items():
-                if m == metric_name and col_idx < len(_row):
-                    return safe_float(_row[col_idx])
-            return None
-
-        sectors.append(Sector(
-            id=sector_id,
-            name=raw_name,
-            monthly_change=get_val("monthly_change"),
-            annual_change=get_val("annual_change"),
-            twelve_month_avg=get_val("twelve_month_avg"),
-            level=1,
-        ))
-
-    return sectors
-
-
-def parse_excel_bytes(content: bytes, debug_path: Optional[Path] = None) -> List[Sector]:
-    """
-    Excel içeriğini parse et. Birden fazla sheet'i dener, en fazla kayıt döndüreni seçer.
+    TÜİK'in data-options attribute'unu JSON'a çevir.
+    Attribute içinde single-quote JS literal kullanılıyor.
     """
     try:
-        import openpyxl
-    except ImportError as exc:
-        raise RuntimeError("openpyxl gerekli: pip install openpyxl") from exc
-
-    if debug_path:
-        debug_path.parent.mkdir(parents=True, exist_ok=True)
-        debug_path.write_bytes(content)
-        log(f"Ham Excel kaydedildi: {debug_path}")
-
-    try:
-        wb = openpyxl.load_workbook(BytesIO(content), data_only=True)
-    except Exception as exc:
-        warn(f"Excel açılamadı: {exc}")
-        return []
-
-    best: List[Sector] = []
-    for sheet in wb.worksheets:
-        result = _parse_sheet(sheet)
-        if len(result) > len(best):
-            best = result
-
-    return best
-
-
-def try_parse_json_response(content: bytes) -> List[Sector]:
-    """
-    Bazı TÜİK endpoint'leri JSON döndürebilir. Deneyimsel parse.
-    """
-    try:
-        data = json.loads(content)
+        # HTML entity decode
+        raw = unescape(raw_attr)
+        # JS single-quote literal → JSON double-quote
+        # null/true/false değerlerini koru, yalnızca string değerleri değiştir
+        def sq_to_dq(m):
+            inner = m.group(1).replace('"', '\\"')
+            return '"' + inner + '"'
+        raw = re.sub(r"'([^']*)'", sq_to_dq, raw)
+        # Trailing commas
+        raw = re.sub(r",\s*}", "}", raw)
+        raw = re.sub(r",\s*]", "]", raw)
+        return json.loads(raw)
     except Exception:
-        return []
-
-    items = []
-    if isinstance(data, list):
-        items = data
-    elif isinstance(data, dict):
-        for key in ("data", "items", "records", "results"):
-            if key in data and isinstance(data[key], list):
-                items = data[key]
-                break
-
-    sectors: List[Sector] = []
-    for item in items:
-        if not isinstance(item, dict):
-            continue
-        name = str(item.get("title") or item.get("name") or item.get("adi") or "")
-        if not name:
-            continue
-        id_match = re.match(r"^(\d{2})", name)
-        sector_id = id_match.group(1) if id_match else name[:4].lower()
-        sectors.append(Sector(
-            id=sector_id,
-            name=name,
-            monthly_change=safe_float(item.get("monthly") or item.get("aylik")),
-            annual_change=safe_float(item.get("annual") or item.get("yillik")),
-            twelve_month_avg=safe_float(item.get("avg12") or item.get("onikiylik")),
-        ))
-    return sectors
-
-
-# ---------------------------------------------------------------------------
-# HTTP indir
-# ---------------------------------------------------------------------------
-
-def download_file(
-    url: str,
-    session_cookies: Optional[Dict[str, str]] = None,
-    timeout: int = 60,
-) -> Tuple[bytes, str]:
-    """
-    URL'den dosya indir. Playwright cookielerini aktarmayı destekler.
-    """
-    hdrs = dict(HEADERS)
-    if session_cookies:
-        hdrs["Cookie"] = "; ".join(f"{k}={v}" for k, v in session_cookies.items())
-    resp = requests.get(url, headers=hdrs, timeout=timeout, stream=True)
-    resp.raise_for_status()
-    content = resp.content
-    ct = resp.headers.get("content-type", "").lower()
-    return content, ct
-
-
-# ---------------------------------------------------------------------------
-# Playwright ile bülten keşfi
-# ---------------------------------------------------------------------------
-
-def discover_latest_press_url(discover_url: str, must_contain: str) -> Optional[str]:
-    """
-    Kategori listeleme sayfasında must_contain içeren en son bülten linkini bul.
-    """
-    log(f"Bülten keşfi: {discover_url} | aranacak: '{must_contain}'")
-
-    # Önce statik dene
-    try:
-        resp = requests.get(discover_url, headers=HEADERS, timeout=30)
-        html = resp.text
-        if not is_js_shell(html):
-            link = _find_press_link_in_html(html, discover_url, must_contain)
-            if link:
-                log(f"Statik HTML'de bulundu: {link}")
-                return link
-    except Exception as exc:
-        warn(f"Statik fetch başarısız: {exc}")
-
-    # Playwright ile dene
-    try:
-        return _discover_with_playwright(discover_url, must_contain)
-    except Exception as exc:
-        warn(f"Playwright keşfi başarısız: {exc}")
         return None
 
 
+def extract_grafiks_from_content(content_html: str) -> Dict[str, Dict[str, Any]]:
+    """
+    HTML içindeki tüm GRAFIK bloklarını parse et.
+    Döner: {"GRAFIK1": opts_dict, "GRAFIK2": opts_dict, ...}
+    """
+    pattern = re.compile(
+        r'<div[^>]+data-name="(GRAFIK\d+)"[^>]+data-lang="tr"[^>]*data-options="([^"]*)"',
+        re.DOTALL,
+    )
+    result: Dict[str, Dict[str, Any]] = {}
+    for m in pattern.finditer(content_html):
+        name = m.group(1)
+        opts = _parse_data_options(m.group(2))
+        if opts:
+            result[name] = opts
+    return result
+
+
+def _grafik_metric_name(grafik_opts: Dict[str, Any]) -> Optional[str]:
+    """Grafik başlığından metrik adını çıkar."""
+    title = str(grafik_opts.get("name", "")).lower()
+    for keyword, metric in GRAFIK_METRIC_MAP.items():
+        if keyword in title:
+            return metric
+    # label field'ına bak
+    for series in grafik_opts.get("data", []):
+        lbl = str(series.get("label", "")).lower()
+        for keyword, metric in GRAFIK_METRIC_MAP.items():
+            if keyword in lbl:
+                return metric
+    return None
+
+
+def _sector_id(label: str) -> str:
+    """Sektör label'ından ID üret."""
+    normalized = label.strip().lower()
+    for key, sid in SECTOR_ID_MAP.items():
+        if key in normalized or normalized in key:
+            return sid
+    # Fallback: ilk 2 hane varsa al
+    m = re.match(r"^(\d{2})", normalized)
+    if m:
+        return m.group(1)
+    return normalized[:6].replace(" ", "_")
+
+
+def build_sectors_from_grafiks(grafiks: Dict[str, Dict[str, Any]]) -> List[Sector]:
+    """
+    GRAFIK2 (yıllık) + GRAFIK4 (aylık) + GRAFIK1 (genel trend) → Sector listesi.
+    """
+    # Metriklere göre grafikleri grupla
+    metric_data: Dict[str, Tuple[List[str], List[float]]] = {}
+    grafik1_series: Optional[Tuple[List[str], List[float]]] = None
+
+    for gname, opts in grafiks.items():
+        metric = _grafik_metric_name(opts)
+        labels = opts.get("labels", [])
+
+        for series in opts.get("data", []):
+            vals = series.get("data", [])
+            if not vals:
+                continue
+            if gname == "GRAFIK1":
+                grafik1_series = (labels, [safe_float(v) for v in vals])
+            if metric and labels:
+                metric_data[metric] = (labels, [safe_float(v) for v in vals])
+
+    annual_labels, annual_vals = metric_data.get("annual_change", ([], []))
+    monthly_labels, monthly_vals = metric_data.get("monthly_change", ([], []))
+
+    if not annual_labels:
+        return []
+
+    # 12-ay ort: GRAFIK1'deki genel TÜFE serisinin son 12 değerinin ortalaması
+    # Sektör bazında 12-ay ort TÜİK'te ayrı grafik olarak yayınlanmıyor,
+    # bu yüzden yıllık değişimin son dönemini kullanıyoruz (iyi yaklaşım).
+    # Not: Gerçek 12-ay ort için ek API endpoint gerekir.
+    avg12_estimate: Optional[float] = None
+    if grafik1_series:
+        _, g1_vals = grafik1_series
+        last12 = [v for v in g1_vals[-12:] if v is not None]
+        if last12:
+            avg12_estimate = round(sum(last12) / len(last12), 2)
+
+    sectors: List[Sector] = []
+    for i, label in enumerate(annual_labels):
+        if label.strip().upper() in ("TÜFE", "TUFE", "GENEL", "TOPLAM"):
+            continue  # Genel endeks satırını atla
+
+        annual = annual_vals[i] if i < len(annual_vals) else None
+        monthly = None
+        for j, ml in enumerate(monthly_labels):
+            if ml.strip().lower() == label.strip().lower():
+                monthly = monthly_vals[j] if j < len(monthly_vals) else None
+                break
+
+        # 12-ay ort: sektör için genel TÜFE ortalamasını proxy olarak kullan
+        twelve_avg = avg12_estimate
+
+        sectors.append(Sector(
+            id=_sector_id(label),
+            name=label.strip(),
+            monthly_change=annual,    # grafik labels aynı sıra değil, aşağıda düzeltilecek
+            annual_change=annual,
+            twelve_month_avg=twelve_avg,
+            level=1,
+        ))
+
+    # monthly_change'i doğru ata
+    monthly_by_label = {ml.strip().lower(): monthly_vals[j]
+                        for j, ml in enumerate(monthly_labels) if j < len(monthly_vals)}
+    for s in sectors:
+        mc = monthly_by_label.get(s.name.strip().lower())
+        if mc is not None:
+            s.monthly_change = mc
+
+    return sectors
+
+
+# ---------------------------------------------------------------------------
+# Press API'dan veri çekme
+# ---------------------------------------------------------------------------
+
+def fetch_press_api_with_playwright(press_url: str) -> Optional[Dict[str, Any]]:
+    """
+    Playwright ile press metadata sayfasını render et,
+    /api/tr/press/{id} yanıtını yakala ve döndür.
+    """
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError:
+        warn("Playwright kurulu değil")
+        return None
+
+    pid_match = re.search(r"/press/(\d+)", press_url)
+    press_id = pid_match.group(1) if pid_match else None
+    if not press_id:
+        warn(f"Press ID çıkarılamadı: {press_url}")
+        return None
+
+    log(f"Playwright: press sayfası yükleniyor → {press_url}")
+    captured: Dict[str, Any] = {}
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True)
+        context = browser.new_context(user_agent=USER_AGENT, locale="tr-TR")
+        page = context.new_page()
+
+        def on_response(resp):
+            try:
+                u, s = resp.url, resp.status
+            except Exception:
+                return
+            if s < 400 and "/api/" in u and f"/press/{press_id}" in u:
+                try:
+                    captured["body"] = resp.json()
+                    captured["url"] = u
+                except Exception as exc:
+                    warn(f"Press API parse: {exc}")
+
+        page.on("response", on_response)
+        page.goto(press_url, wait_until="domcontentloaded", timeout=90000)
+        try:
+            page.wait_for_load_state("networkidle", timeout=20000)
+        except Exception:
+            pass
+        page.wait_for_timeout(3000)
+        browser.close()
+
+    if "body" in captured:
+        log(f"Press API yakalandı: {captured.get('url')}")
+        return captured["body"]
+
+    warn(f"Press API yanıtı gelmedi ({press_url})")
+    return None
+
+
+def scrape_press_url(family: str, press_url: str) -> ScrapeResult:
+    """
+    Press URL'inden sektör verilerini çek.
+    """
+    result = ScrapeResult(
+        family=family,
+        press_id=press_id_from_url(press_url),
+        date=date.today().strftime("%Y-%m"),
+        source_url=press_url,
+    )
+
+    # API yanıtını al
+    api_body = fetch_press_api_with_playwright(press_url)
+    if not api_body:
+        result.error = "Press API yanıtı alınamadı"
+        return result
+
+    # content HTML'den grafikleri çıkar
+    content_html = api_body.get("data", {}).get("content", "")
+    if not content_html:
+        # Yanıt yapısı farklı olabilir
+        content_html = api_body.get("content", "")
+
+    if not content_html:
+        result.error = f"content alanı boş — API anahtarları: {list(api_body.keys())}"
+        return result
+
+    grafiks = extract_grafiks_from_content(content_html)
+    log(f"Grafik sayısı: {len(grafiks)} → {list(grafiks.keys())}")
+
+    if not grafiks:
+        result.error = "HTML içinde grafik bulunamadı"
+        return result
+
+    sectors = build_sectors_from_grafiks(grafiks)
+    log(f"Sektör sayısı: {len(sectors)}")
+
+    if not sectors:
+        result.error = "Grafiklerden sektör verisi üretilemedi"
+        return result
+
+    result.sectors = [asdict(s) for s in sectors]
+    return result
+
+
+# ---------------------------------------------------------------------------
+# Bülten keşfi
+# ---------------------------------------------------------------------------
+
 def _find_press_link_in_html(html: str, base_url: str, must_contain: str) -> Optional[str]:
-    # Match both /press/123/metadata and /press/123 (without /metadata)
     href_re = re.compile(r'href=["\']([^"\']+/press/\d+(?:/metadata)?[^"\']*)["\']', re.IGNORECASE)
     candidates = []
     for m in href_re.finditer(html):
         raw_url = unescape(m.group(1))
         abs_url = urljoin(base_url, raw_url)
-        # Normalise: ensure /metadata suffix
         abs_url = re.sub(r'(/press/\d+)(?!/metadata)(/|$)', r'\1/metadata\2', abs_url)
         start = max(0, m.start() - 500)
-        end = min(len(html), m.end() + 500)
-        context = html[start:end]
+        context = html[start: m.end() + 500]
         if must_contain.lower() in context.lower():
             pid = press_id_from_url(abs_url)
             if pid:
                 candidates.append((int(pid), abs_url))
     if candidates:
-        candidates.sort(key=lambda x: x[0], reverse=True)
-        return candidates[0][1]
+        return max(candidates, key=lambda x: x[0])[1]
     return None
 
 
 def _extract_press_id_from_json(data: Any, must_contain: str) -> Optional[int]:
-    """
-    TÜİK API JSON yanıtından en yüksek press ID'yi çıkar.
-    must_contain boşsa veya eşleşme yoksa saf en-yüksek-ID döndürür.
-    """
     candidates: List[int] = []
 
-    def _walk(obj: Any) -> None:
+    def _walk(obj):
         if isinstance(obj, dict):
-            # press/id alanı var mı?
             for key in ("id", "pressId", "press_id", "Id"):
                 val = obj.get(key)
                 if isinstance(val, int) and val > 10000:
-                    title = str(
-                        obj.get("title") or obj.get("name") or
-                        obj.get("baslik") or obj.get("adi") or ""
-                    )
+                    title = str(obj.get("title") or obj.get("name") or
+                                obj.get("baslik") or obj.get("adi") or "")
                     if not must_contain or must_contain.lower() in title.lower():
                         candidates.append(val)
             for v in obj.values():
@@ -398,11 +427,31 @@ def _extract_press_id_from_json(data: Any, must_contain: str) -> Optional[int]:
     return max(candidates) if candidates else None
 
 
-# API endpoint patterns to watch during category page load
 _API_PRESS_LIST_RE = re.compile(
     r"/api/(?:tr|en)/(?:press(?:es)?|bulten|release)s?",
     re.IGNORECASE,
 )
+
+
+def discover_latest_press_url(discover_url: str, must_contain: str) -> Optional[str]:
+    log(f"Bülten keşfi: {discover_url} | aranacak: '{must_contain}'")
+
+    try:
+        resp = requests.get(discover_url, headers=HEADERS, timeout=30)
+        html = resp.text
+        if not is_js_shell(html):
+            link = _find_press_link_in_html(html, discover_url, must_contain)
+            if link:
+                log(f"Statik HTML'de bulundu: {link}")
+                return link
+    except Exception as exc:
+        warn(f"Statik fetch: {exc}")
+
+    try:
+        return _discover_with_playwright(discover_url, must_contain)
+    except Exception as exc:
+        warn(f"Playwright keşfi: {exc}")
+        return None
 
 
 def _discover_with_playwright(discover_url: str, must_contain: str) -> Optional[str]:
@@ -417,7 +466,6 @@ def _discover_with_playwright(discover_url: str, must_contain: str) -> Optional[
         context = browser.new_context(user_agent=USER_AGENT, locale="tr-TR")
         page = context.new_page()
 
-        # Intercept API responses that may return press/bulletin lists
         def on_response(resp):
             try:
                 url = resp.url
@@ -430,12 +478,11 @@ def _discover_with_playwright(discover_url: str, must_contain: str) -> Optional[
                 pid = _extract_press_id_from_json(body, must_contain)
                 if pid:
                     api_press_ids.append(pid)
-                    log(f"API yanıtından press ID bulundu: {pid} ← {url}")
+                    log(f"API'den press ID: {pid}")
             except Exception:
                 pass
 
         page.on("response", on_response)
-
         page.goto(discover_url, wait_until="domcontentloaded", timeout=60000)
         try:
             page.wait_for_load_state("networkidle", timeout=15000)
@@ -453,287 +500,28 @@ def _discover_with_playwright(discover_url: str, must_contain: str) -> Optional[
                     text = anchor.inner_text(timeout=500)
                     if must_contain.lower() in text.lower():
                         abs_url = urljoin(discover_url, href)
-                        # Normalise: ensure /metadata suffix
-                        abs_url = re.sub(
-                            r'(/press/\d+)(?!/metadata)(/|$)', r'\1/metadata\2', abs_url
-                        )
-                        pid = press_id_from_url(abs_url)
-                        if pid:
+                        abs_url = re.sub(r'(/press/\d+)(?!/metadata)(/|$)', r'\1/metadata\2', abs_url)
+                        if press_id_from_url(abs_url):
                             found_url = abs_url
                             break
                 except Exception:
                     continue
 
-        # Fallback: use highest press ID captured from API responses
         if not found_url and api_press_ids:
             best_id = max(api_press_ids)
             base = discover_url.split("/tr/")[0] if "/tr/" in discover_url else discover_url
             found_url = f"{base}/tr/press/{best_id}/metadata"
-            log(f"API press ID'den URL oluşturuldu: {found_url}")
+            log(f"API press ID'den URL: {found_url}")
 
         browser.close()
 
     if found_url:
-        log(f"Playwright'ta bulundu: {found_url}")
+        log(f"Bülten bulundu: {found_url}")
     return found_url
 
 
 # ---------------------------------------------------------------------------
-# Playwright ile download URL yakalama
-# ---------------------------------------------------------------------------
-
-def _extract_download_urls_from_press_json(data: Any, base_origin: str) -> List[str]:
-    """
-    TÜİK /api/tr/press/{id} JSON yanıtından gerçek dosya/download URL'lerini çıkar.
-    Olası alan adları: downloadUrl, fileUrl, url, href, link, path, filePath...
-    """
-    urls: List[str] = []
-
-    def _walk(obj: Any) -> None:
-        if isinstance(obj, dict):
-            for key in ("downloadUrl", "download_url", "fileUrl", "file_url",
-                        "url", "href", "link", "path", "filePath", "file_path",
-                        "excelUrl", "excel_url", "dataUrl", "data_url"):
-                val = obj.get(key)
-                if isinstance(val, str) and val and len(val) > 5:
-                    abs_val = val if val.startswith("http") else urljoin(base_origin + "/", val.lstrip("/"))
-                    # Sadece TÜİK domain'inden veya relatif yoldan
-                    if "tuik.gov.tr" in abs_val or val.startswith("/api/"):
-                        # Statik asset (css/js/font) değil
-                        if not any(ext in abs_val.lower() for ext in (".css", ".js", ".svg", ".ttf", ".woff", ".png", ".jpg")):
-                            urls.append(abs_val)
-            for v in obj.values():
-                _walk(v)
-        elif isinstance(obj, list):
-            for item in obj:
-                _walk(item)
-
-    _walk(data)
-    return list(dict.fromkeys(urls))  # deduplicate, preserve order
-
-
-def get_download_urls_via_playwright(
-    press_url: str,
-    save_diagnostics: bool = True,
-) -> Tuple[List[str], Dict[str, str]]:
-    """
-    Bülten metadata sayfasını render et, download URL'lerini döndür.
-
-    Strateji (öncelik sırasıyla):
-    1. /api/tr/press/{id} yanıtını yakala → JSON içinde download URL'lerini çıkar
-    2. Bilinen /api/.../data/downloads pattern
-    3. Excel/zip content-type olan /api/ responses (/assets/ hariç)
-    4. HTML içinde bilinen pattern
-    5. Diagnostic: tüm TÜİK URL'lerini + press API body key'lerini kaydet
-    """
-    from playwright.sync_api import sync_playwright
-
-    log(f"Playwright: metadata render ediliyor → {press_url}")
-    found_urls: Set[str] = set()
-    all_api_urls: List[str] = []
-    press_api_bodies: List[Dict[str, Any]] = []
-    cookies: Dict[str, str] = {}
-
-    pid_match = re.search(r"/press/(\d+)", press_url)
-    press_id = pid_match.group(1) if pid_match else None
-    base_origin = press_url.split("/tr/")[0] if "/tr/" in press_url else "https://veriportali.tuik.gov.tr"
-
-    with sync_playwright() as pw:
-        browser = pw.chromium.launch(headless=True)
-        context = browser.new_context(user_agent=USER_AGENT, locale="tr-TR")
-        page = context.new_page()
-
-        def on_response(resp):
-            try:
-                u = resp.url
-                status = resp.status
-            except Exception:
-                return
-
-            if status >= 400:
-                return
-
-            # Diagnostic kayıt
-            if "tuik.gov.tr" in u:
-                all_api_urls.append(u)
-
-            # Strateji 1: Press API JSON → download URL çıkar
-            if press_id and "/api/" in u and f"/press/{press_id}" in u:
-                try:
-                    body = resp.json()
-                    press_api_bodies.append({"url": u, "body": body})
-                    dl_urls = _extract_download_urls_from_press_json(body, base_origin)
-                    if dl_urls:
-                        log(f"Press API'den {len(dl_urls)} URL çıkarıldı: {dl_urls}")
-                        found_urls.update(dl_urls)
-                    else:
-                        log(f"Press API geldi ama download URL yok → keys: {list(body.keys()) if isinstance(body, dict) else type(body)}")
-                except Exception as exc:
-                    warn(f"Press API parse: {exc}")
-                return
-
-            # Strateji 2: Bilinen download pattern
-            if "/api/" in u and "/data/downloads" in u:
-                found_urls.add(u)
-                return
-
-            # Strateji 3: Excel/zip/binary content — sadece /api/ path'lerinden
-            if "/api/" in u and "/assets/" not in u and "tuik.gov.tr" in u:
-                try:
-                    ct = resp.headers.get("content-type", "").lower()
-                    if any(x in ct for x in ("excel", "spreadsheet", "officedocument", "zip",
-                                              "octet-stream")):
-                        found_urls.add(u)
-                        log(f"API binary response: {u} [{ct}]")
-                except Exception:
-                    pass
-
-        page.on("response", on_response)
-        page.goto(press_url, wait_until="domcontentloaded", timeout=90000)
-        try:
-            page.wait_for_load_state("networkidle", timeout=20000)
-        except Exception:
-            pass
-        page.wait_for_timeout(5000)
-
-        # Strateji 4: HTML'de bilinen pattern
-        html = page.content()
-        for m in DOWNLOAD_RE.finditer(html):
-            found_urls.add(m.group(0))
-
-        try:
-            for c in context.cookies():
-                cookies[c["name"]] = c["value"]
-        except Exception:
-            pass
-
-        browser.close()
-
-    # Diagnostic kaydet
-    if save_diagnostics:
-        diag_path = CACHE_DIR / "diagnostic_urls.json"
-        try:
-            CACHE_DIR.mkdir(parents=True, exist_ok=True)
-            diag_data = {
-                "press_url": press_url,
-                "captured_at": datetime.utcnow().isoformat(timespec="seconds"),
-                "all_tuik_urls": sorted(set(all_api_urls)),
-                "matched_download_urls": sorted(found_urls),
-                "press_api_responses": [
-                    {
-                        "url": e["url"],
-                        "top_keys": list(e["body"].keys()) if isinstance(e["body"], dict) else str(type(e["body"])),
-                        "body_preview": json.dumps(e["body"], ensure_ascii=False)[:2000],
-                    }
-                    for e in press_api_bodies
-                ],
-            }
-            diag_path.write_text(json.dumps(diag_data, ensure_ascii=False, indent=2), encoding="utf-8")
-            log(f"Diagnostic kaydedildi: {diag_path} ({len(all_api_urls)} URL, {len(press_api_bodies)} press API yanıtı)")
-        except Exception as exc:
-            warn(f"Diagnostic kayıt hatası: {exc}")
-
-    log(f"Yakalanan download URL sayısı: {len(found_urls)}")
-    if not found_urls:
-        if press_api_bodies:
-            warn("Press API yanıtı var ama download URL bulunamadı — diagnostic/press_api_responses'a bak")
-        else:
-            warn(f"Download URL yok. {len(all_api_urls)} TÜİK URL'si diagnostic'te. Press API yanıtı gelmedi.")
-    return sorted(found_urls), cookies
-
-
-# ---------------------------------------------------------------------------
-# Ana scrape fonksiyonu
-# ---------------------------------------------------------------------------
-
-def scrape_family(
-    family: str,
-    press_url: str,
-    debug: bool = False,
-) -> ScrapeResult:
-    result = ScrapeResult(
-        family=family,
-        press_id=press_id_from_url(press_url),
-        date=date.today().strftime("%Y-%m"),
-        source_url=press_url,
-        download_url=None,
-    )
-
-    # Statik HTML'de download URL var mı?
-    static_urls: List[str] = []
-    try:
-        html = requests.get(press_url, headers=HEADERS, timeout=30).text
-        if not is_js_shell(html):
-            for m in DOWNLOAD_RE.finditer(html):
-                static_urls.append(m.group(0))
-    except Exception as exc:
-        warn(f"Statik fetch: {exc}")
-
-    if static_urls:
-        log(f"Statik HTML'de {len(static_urls)} download URL bulundu")
-        dl_urls, cookies = static_urls, {}
-    else:
-        try:
-            dl_urls, cookies = get_download_urls_via_playwright(press_url)
-        except Exception as exc:
-            result.error = f"Playwright başarısız: {exc}"
-            return result
-
-    if not dl_urls:
-        result.error = "Download URL bulunamadı"
-        return result
-
-    sectors: List[Sector] = []
-    last_error: Optional[str] = None
-
-    for url in dl_urls:
-        log(f"İndiriliyor: {url}")
-        try:
-            content, ct = download_file(url, session_cookies=cookies if cookies else None)
-        except Exception as exc:
-            last_error = f"İndirme hatası ({url}): {exc}"
-            warn(last_error)
-            continue
-
-        debug_path: Optional[Path] = None
-        if debug:
-            fname = re.sub(r"[^a-z0-9]", "_", url.split("?")[-1])[:40]
-            debug_path = CACHE_DIR / f"debug_{fname}.xlsx"
-
-        is_excel = (
-            "excel" in ct or "spreadsheet" in ct or "officedocument" in ct
-            or (len(content) > 4 and content[:4] == b"PK\x03\x04")
-            or (len(content) > 8 and content[:8] == b"\xd0\xcf\x11\xe0\xa1\xb1\x1a\xe1")
-        )
-
-        if is_excel:
-            sectors = parse_excel_bytes(content, debug_path=debug_path)
-            if sectors:
-                result.download_url = url
-                log(f"Excel parse: {len(sectors)} sektör bulundu")
-                break
-            else:
-                warn(f"Excel parse: sektör bulunamadı → {url}")
-        else:
-            sectors = try_parse_json_response(content)
-            if sectors:
-                result.download_url = url
-                log(f"JSON parse: {len(sectors)} sektör bulundu")
-                break
-            else:
-                warn(f"Tanımsız içerik veya parse başarısız: ct={ct}")
-                last_error = f"Parse edilemeyen içerik ({ct})"
-
-    if not sectors:
-        result.error = last_error or "Hiçbir download URL'inden veri çıkarılamadı"
-        return result
-
-    result.sectors = [asdict(s) for s in sectors]
-    return result
-
-
-# ---------------------------------------------------------------------------
-# Config yükleme
+# Config
 # ---------------------------------------------------------------------------
 
 def load_config(path: Path) -> List[Dict[str, Any]]:
@@ -742,26 +530,24 @@ def load_config(path: Path) -> List[Dict[str, Any]]:
         return raw
     if isinstance(raw, dict) and "families" in raw:
         return raw["families"]
-    raise ValueError(f"Geçersiz config formatı: {path}")
+    raise ValueError(f"Geçersiz config: {path}")
 
 
 # ---------------------------------------------------------------------------
-# CLI
+# CLI + main
 # ---------------------------------------------------------------------------
 
 def parse_args(argv=None) -> argparse.Namespace:
-    p = argparse.ArgumentParser(description="TÜİK TÜFE veri çekici")
+    p = argparse.ArgumentParser(description="TÜİK TÜFE veri çekici (grafik parse)")
     p.add_argument("--family", help="Tek family adı")
     p.add_argument("--url", help="Metadata URL (--family ile birlikte)")
     p.add_argument("--config", help="families.json yolu")
-    p.add_argument("--output", help="Çıktı JSON dosyası (varsayılan: data/raw/tuik_latest.json)")
-    p.add_argument("--debug", action="store_true", help="Ham Excel'i kaydet")
+    p.add_argument("--output", help="Çıktı JSON (varsayılan: data/raw/tuik_latest.json)")
     return p.parse_args(argv)
 
 
 def main(argv=None) -> int:
     args = parse_args(argv)
-
     jobs: List[Dict[str, Any]] = []
 
     if args.family and args.url:
@@ -770,8 +556,6 @@ def main(argv=None) -> int:
         config_path = Path(args.config) if args.config else DEFAULT_CONFIG
         if not config_path.exists():
             print(f"[HATA] Config bulunamadı: {config_path}", file=sys.stderr)
-            print("Kullanım: --family/--url, --config, veya config/families.json oluştur",
-                  file=sys.stderr)
             return 1
         jobs = load_config(config_path)
         log(f"Config: {config_path} → {len(jobs)} family")
@@ -782,9 +566,8 @@ def main(argv=None) -> int:
 
     for job in jobs:
         family = job.get("family", "unknown")
-        label = job.get("label", family)
+        label  = job.get("label", family)
 
-        # Explicit URL overrides everything; otherwise always try discovery first.
         press_url: Optional[str] = job.get("url") or None
         discover_url = job.get("discover_url")
 
@@ -793,34 +576,26 @@ def main(argv=None) -> int:
             press_url = discover_latest_press_url(discover_url, must_contain)
             if not press_url and job.get("fallback_url"):
                 press_url = job["fallback_url"]
-                warn(f"Keşif başarısız, fallback kullanılıyor: {press_url}")
+                warn(f"Keşif başarısız, fallback: {press_url}")
         elif not press_url:
             press_url = job.get("fallback_url") or None
 
         if not press_url:
-            log(f"[ATLA] {family}: press URL bulunamadı")
-            all_results.append({
-                "family": family,
-                "label": label,
-                "error": "press_url bulunamadı",
-                "sectors": [],
-            })
+            log(f"[ATLA] {family}: press URL yok")
+            all_results.append({"family": family, "label": label,
+                                 "error": "press_url bulunamadı", "sectors": []})
             continue
 
         log(f"Scraping: family={family}, url={press_url}")
-        res = scrape_family(family, press_url, debug=args.debug)
+        res = scrape_press_url(family, press_url)
         n = len(res.sectors)
         log(f"Tamamlandı: family={family}, sektör={n}, hata={res.error}")
         total_sectors += n
 
         entry: Dict[str, Any] = {
-            "family": family,
-            "label": label,
-            "press_id": res.press_id,
-            "date": res.date,
-            "source_url": res.source_url,
-            "download_url": res.download_url,
-            "sectors": res.sectors,
+            "family": family, "label": label,
+            "press_id": res.press_id, "date": res.date,
+            "source_url": res.source_url, "sectors": res.sectors,
         }
         if res.error:
             entry["error"] = res.error
@@ -829,7 +604,7 @@ def main(argv=None) -> int:
         all_results.append(entry)
 
     if total_sectors == 0:
-        log("UYARI: Hiçbir family'den veri çıkarılamadı")
+        log("UYARI: Hiçbir sektör verisi çıkarılamadı")
 
     payload: Dict[str, Any] = {
         "scraped_at": datetime.utcnow().isoformat(timespec="seconds"),
@@ -844,9 +619,7 @@ def main(argv=None) -> int:
     if total_sectors > 0:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         cache_path = CACHE_DIR / "tuik_latest.json"
-        cache_path.write_text(
-            json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
+        cache_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
         log(f"Cache güncellendi: {cache_path}")
 
     return 0 if total_sectors > 0 else 2

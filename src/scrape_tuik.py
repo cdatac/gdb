@@ -482,20 +482,61 @@ def _discover_with_playwright(discover_url: str, must_contain: str) -> Optional[
 # Playwright ile download URL yakalama
 # ---------------------------------------------------------------------------
 
+def _extract_download_urls_from_press_json(data: Any, base_origin: str) -> List[str]:
+    """
+    TÜİK /api/tr/press/{id} JSON yanıtından gerçek dosya/download URL'lerini çıkar.
+    Olası alan adları: downloadUrl, fileUrl, url, href, link, path, filePath...
+    """
+    urls: List[str] = []
+
+    def _walk(obj: Any) -> None:
+        if isinstance(obj, dict):
+            for key in ("downloadUrl", "download_url", "fileUrl", "file_url",
+                        "url", "href", "link", "path", "filePath", "file_path",
+                        "excelUrl", "excel_url", "dataUrl", "data_url"):
+                val = obj.get(key)
+                if isinstance(val, str) and val and len(val) > 5:
+                    abs_val = val if val.startswith("http") else urljoin(base_origin + "/", val.lstrip("/"))
+                    # Sadece TÜİK domain'inden veya relatif yoldan
+                    if "tuik.gov.tr" in abs_val or val.startswith("/api/"):
+                        # Statik asset (css/js/font) değil
+                        if not any(ext in abs_val.lower() for ext in (".css", ".js", ".svg", ".ttf", ".woff", ".png", ".jpg")):
+                            urls.append(abs_val)
+            for v in obj.values():
+                _walk(v)
+        elif isinstance(obj, list):
+            for item in obj:
+                _walk(item)
+
+    _walk(data)
+    return list(dict.fromkeys(urls))  # deduplicate, preserve order
+
+
 def get_download_urls_via_playwright(
     press_url: str,
     save_diagnostics: bool = True,
 ) -> Tuple[List[str], Dict[str, str]]:
     """
-    Bülten metadata sayfasını render et, download API URL'lerini ve cookieleri döndür.
-    Tüm network trafiğini diagnostic dosyasına kaydeder (URL pattern keşfi için).
+    Bülten metadata sayfasını render et, download URL'lerini döndür.
+
+    Strateji (öncelik sırasıyla):
+    1. /api/tr/press/{id} yanıtını yakala → JSON içinde download URL'lerini çıkar
+    2. Bilinen /api/.../data/downloads pattern
+    3. Excel/zip content-type olan /api/ responses (/assets/ hariç)
+    4. HTML içinde bilinen pattern
+    5. Diagnostic: tüm TÜİK URL'lerini + press API body key'lerini kaydet
     """
     from playwright.sync_api import sync_playwright
 
     log(f"Playwright: metadata render ediliyor → {press_url}")
     found_urls: Set[str] = set()
-    all_api_urls: List[str] = []  # Diagnostic: tüm API çağrıları
+    all_api_urls: List[str] = []
+    press_api_bodies: List[Dict[str, Any]] = []
     cookies: Dict[str, str] = {}
+
+    pid_match = re.search(r"/press/(\d+)", press_url)
+    press_id = pid_match.group(1) if pid_match else None
+    base_origin = press_url.split("/tr/")[0] if "/tr/" in press_url else "https://veriportali.tuik.gov.tr"
 
     with sync_playwright() as pw:
         browser = pw.chromium.launch(headless=True)
@@ -509,29 +550,43 @@ def get_download_urls_via_playwright(
             except Exception:
                 return
 
-            # Diagnostic: tüm TÜİK API çağrılarını kaydet
-            if "tuik.gov.tr" in u and status < 400:
+            if status >= 400:
+                return
+
+            # Diagnostic kayıt
+            if "tuik.gov.tr" in u:
                 all_api_urls.append(u)
 
-            # Birincil pattern
+            # Strateji 1: Press API JSON → download URL çıkar
+            if press_id and "/api/" in u and f"/press/{press_id}" in u:
+                try:
+                    body = resp.json()
+                    press_api_bodies.append({"url": u, "body": body})
+                    dl_urls = _extract_download_urls_from_press_json(body, base_origin)
+                    if dl_urls:
+                        log(f"Press API'den {len(dl_urls)} URL çıkarıldı: {dl_urls}")
+                        found_urls.update(dl_urls)
+                    else:
+                        log(f"Press API geldi ama download URL yok → keys: {list(body.keys()) if isinstance(body, dict) else type(body)}")
+                except Exception as exc:
+                    warn(f"Press API parse: {exc}")
+                return
+
+            # Strateji 2: Bilinen download pattern
             if "/api/" in u and "/data/downloads" in u:
                 found_urls.add(u)
                 return
 
-            # Geniş pattern: download/file/excel içeren URL'ler
-            if BROAD_DOWNLOAD_RE.search(u) and status < 400:
-                found_urls.add(u)
-                return
-
-            # Content-type'a göre Excel/binary yakalama
-            try:
-                ct = resp.headers.get("content-type", "").lower()
-                if any(x in ct for x in ("excel", "spreadsheet", "officedocument", "octet-stream", "zip")):
-                    if "tuik.gov.tr" in u:
+            # Strateji 3: Excel/zip/binary content — sadece /api/ path'lerinden
+            if "/api/" in u and "/assets/" not in u and "tuik.gov.tr" in u:
+                try:
+                    ct = resp.headers.get("content-type", "").lower()
+                    if any(x in ct for x in ("excel", "spreadsheet", "officedocument", "zip",
+                                              "octet-stream")):
                         found_urls.add(u)
-                        log(f"Binary response yakalandı: {u} [{ct}]")
-            except Exception:
-                pass
+                        log(f"API binary response: {u} [{ct}]")
+                except Exception:
+                    pass
 
         page.on("response", on_response)
         page.goto(press_url, wait_until="domcontentloaded", timeout=90000)
@@ -541,27 +596,10 @@ def get_download_urls_via_playwright(
             pass
         page.wait_for_timeout(5000)
 
+        # Strateji 4: HTML'de bilinen pattern
         html = page.content()
-
-        # Her iki pattern'i HTML'de ara
-        for pattern in (DOWNLOAD_RE, BROAD_DOWNLOAD_RE):
-            for m in pattern.finditer(html):
-                found_urls.add(m.group(0))
-
-        # DOM element attribute'larını tara
-        for selector in ("a[href]", "[data-href]", "button[onclick]", "[data-url]", "[data-download]"):
-            try:
-                for h in page.locator(selector).all()[:300]:
-                    for attr in ("href", "data-href", "onclick", "data-url", "data-download", "data-file"):
-                        try:
-                            v = h.get_attribute(attr) or ""
-                        except Exception:
-                            v = ""
-                        for pattern in (DOWNLOAD_RE, BROAD_DOWNLOAD_RE):
-                            for m in pattern.finditer(v):
-                                found_urls.add(m.group(0))
-            except Exception:
-                continue
+        for m in DOWNLOAD_RE.finditer(html):
+            found_urls.add(m.group(0))
 
         try:
             for c in context.cookies():
@@ -571,8 +609,8 @@ def get_download_urls_via_playwright(
 
         browser.close()
 
-    # Diagnostic: API URL'lerini kaydet → hangi pattern doğru tespit edilebilir
-    if save_diagnostics and all_api_urls:
+    # Diagnostic kaydet
+    if save_diagnostics:
         diag_path = CACHE_DIR / "diagnostic_urls.json"
         try:
             CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -581,15 +619,26 @@ def get_download_urls_via_playwright(
                 "captured_at": datetime.utcnow().isoformat(timespec="seconds"),
                 "all_tuik_urls": sorted(set(all_api_urls)),
                 "matched_download_urls": sorted(found_urls),
+                "press_api_responses": [
+                    {
+                        "url": e["url"],
+                        "top_keys": list(e["body"].keys()) if isinstance(e["body"], dict) else str(type(e["body"])),
+                        "body_preview": json.dumps(e["body"], ensure_ascii=False)[:2000],
+                    }
+                    for e in press_api_bodies
+                ],
             }
             diag_path.write_text(json.dumps(diag_data, ensure_ascii=False, indent=2), encoding="utf-8")
-            log(f"Diagnostic kaydedildi: {diag_path} ({len(all_api_urls)} URL)")
+            log(f"Diagnostic kaydedildi: {diag_path} ({len(all_api_urls)} URL, {len(press_api_bodies)} press API yanıtı)")
         except Exception as exc:
             warn(f"Diagnostic kayıt hatası: {exc}")
 
     log(f"Yakalanan download URL sayısı: {len(found_urls)}")
-    if not found_urls and all_api_urls:
-        warn(f"Download URL bulunamadı. Yakalanan {len(all_api_urls)} TÜİK URL'si diagnostic dosyasında.")
+    if not found_urls:
+        if press_api_bodies:
+            warn("Press API yanıtı var ama download URL bulunamadı — diagnostic/press_api_responses'a bak")
+        else:
+            warn(f"Download URL yok. {len(all_api_urls)} TÜİK URL'si diagnostic'te. Press API yanıtı gelmedi.")
     return sorted(found_urls), cookies
 
 

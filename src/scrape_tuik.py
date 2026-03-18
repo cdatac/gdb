@@ -607,7 +607,7 @@ def main(argv=None) -> int:
         log("UYARI: Hiçbir sektör verisi çıkarılamadı")
 
     payload: Dict[str, Any] = {
-        "scraped_at": datetime.utcnow().isoformat(timespec="seconds"),
+        "scraped_at": datetime.now().isoformat(timespec="seconds"),
         "total_sectors": total_sectors,
         "families": all_results,
     }

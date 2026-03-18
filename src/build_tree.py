@@ -251,7 +251,7 @@ def main() -> int:
     print(f"[INFO] Grup sayısı: {len(groups)}")
     if groups:
         top = groups[0]
-        print(f"[INFO] En riskli: {top['name']} → {top['score']}")
+        print(f"[INFO] En riskli: {top['name']} -> {top['score']}")
 
     return 0
 

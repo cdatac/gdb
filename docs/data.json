@@ -22,24 +22,6 @@
       "children": []
     },
     {
-      "id": "12",
-      "name": "Sigort ve finansal hizmetler",
-      "score": 51.4,
-      "color": "#4ade80",
-      "change": 28.31,
-      "reason": "Yıllık: 28.3% | 12-ay ort: 33.6% | Aylık: 28.3%",
-      "score_parts": {
-        "score": 51.4,
-        "level_score": 49.4,
-        "trend_score": 43.7,
-        "acceleration_score": 80.0,
-        "volatility_score": 100.0,
-        "persistence_score": 0.0
-      },
-      "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-      "children": []
-    },
-    {
       "id": "01",
       "name": "Gıda ve alkolsüz içecekler",
       "score": 47.5,
@@ -52,6 +34,24 @@
         "trend_score": 53.4,
         "acceleration_score": 80.0,
         "volatility_score": 23.1,
+        "persistence_score": 0.0
+      },
+      "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
+      "children": []
+    },
+    {
+      "id": "12",
+      "name": "Sigort ve finansal hizmetler",
+      "score": 44.8,
+      "color": "#86efac",
+      "change": 8.02,
+      "reason": "Yıllık: 28.3% | 12-ay ort: 33.6% | Aylık: 8.0%",
+      "score_parts": {
+        "score": 44.8,
+        "level_score": 49.4,
+        "trend_score": 43.7,
+        "acceleration_score": 80.0,
+        "volatility_score": 34.0,
         "persistence_score": 0.0
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",

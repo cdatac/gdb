@@ -1,5 +1,5 @@
 {
-  "scraped_at": "2026-03-18T16:44:19",
+  "scraped_at": "2026-03-18T17:11:59",
   "total_sectors": 13,
   "families": [
     {
@@ -100,7 +100,7 @@
         {
           "id": "12",
           "name": "Sigort ve finansal hizmetler",
-          "monthly_change": 28.31,
+          "monthly_change": 8.02,
           "annual_change": 28.31,
           "twelve_month_avg": 33.6,
           "level": 1

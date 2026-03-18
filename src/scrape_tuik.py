@@ -48,9 +48,18 @@ USER_AGENT = (
 )
 HEADERS = {"User-Agent": USER_AGENT, "Accept-Language": "tr,en;q=0.9"}
 
+# Birincil pattern: bilinen download endpoint formatı
 DOWNLOAD_RE = re.compile(
     r"https://veriportali\.tuik\.gov\.tr/api/"
     r"(?:tr|en)/data/downloads\?[^\"'<>\s]+",
+    re.IGNORECASE,
+)
+
+# Geniş pattern: herhangi bir TÜİK dosya/download URL'i
+BROAD_DOWNLOAD_RE = re.compile(
+    r"https://(?:veriportali|data)\.tuik\.gov\.tr/"
+    r"(?:[^\s\"'<>]*(?:download|file|excel|xlsx|GetFile|export|indir)[^\s\"'<>]*"
+    r"|api/(?:tr|en)/[^\s\"'<>]*(?:file|download|data|excel)[^\s\"'<>]*)",
     re.IGNORECASE,
 )
 PRESS_RE = re.compile(r"/(?:tr|en)/press/(\d+)/metadata", re.IGNORECASE)
@@ -475,14 +484,17 @@ def _discover_with_playwright(discover_url: str, must_contain: str) -> Optional[
 
 def get_download_urls_via_playwright(
     press_url: str,
+    save_diagnostics: bool = True,
 ) -> Tuple[List[str], Dict[str, str]]:
     """
     Bülten metadata sayfasını render et, download API URL'lerini ve cookieleri döndür.
+    Tüm network trafiğini diagnostic dosyasına kaydeder (URL pattern keşfi için).
     """
     from playwright.sync_api import sync_playwright
 
     log(f"Playwright: metadata render ediliyor → {press_url}")
     found_urls: Set[str] = set()
+    all_api_urls: List[str] = []  # Diagnostic: tüm API çağrıları
     cookies: Dict[str, str] = {}
 
     with sync_playwright() as pw:
@@ -493,10 +505,33 @@ def get_download_urls_via_playwright(
         def on_response(resp):
             try:
                 u = resp.url
+                status = resp.status
             except Exception:
                 return
+
+            # Diagnostic: tüm TÜİK API çağrılarını kaydet
+            if "tuik.gov.tr" in u and status < 400:
+                all_api_urls.append(u)
+
+            # Birincil pattern
             if "/api/" in u and "/data/downloads" in u:
                 found_urls.add(u)
+                return
+
+            # Geniş pattern: download/file/excel içeren URL'ler
+            if BROAD_DOWNLOAD_RE.search(u) and status < 400:
+                found_urls.add(u)
+                return
+
+            # Content-type'a göre Excel/binary yakalama
+            try:
+                ct = resp.headers.get("content-type", "").lower()
+                if any(x in ct for x in ("excel", "spreadsheet", "officedocument", "octet-stream", "zip")):
+                    if "tuik.gov.tr" in u:
+                        found_urls.add(u)
+                        log(f"Binary response yakalandı: {u} [{ct}]")
+            except Exception:
+                pass
 
         page.on("response", on_response)
         page.goto(press_url, wait_until="domcontentloaded", timeout=90000)
@@ -507,19 +542,24 @@ def get_download_urls_via_playwright(
         page.wait_for_timeout(5000)
 
         html = page.content()
-        for m in DOWNLOAD_RE.finditer(html):
-            found_urls.add(m.group(0))
 
-        for selector in ("a[href]", "[data-href]", "button[onclick]"):
+        # Her iki pattern'i HTML'de ara
+        for pattern in (DOWNLOAD_RE, BROAD_DOWNLOAD_RE):
+            for m in pattern.finditer(html):
+                found_urls.add(m.group(0))
+
+        # DOM element attribute'larını tara
+        for selector in ("a[href]", "[data-href]", "button[onclick]", "[data-url]", "[data-download]"):
             try:
                 for h in page.locator(selector).all()[:300]:
-                    for attr in ("href", "data-href", "onclick"):
+                    for attr in ("href", "data-href", "onclick", "data-url", "data-download", "data-file"):
                         try:
                             v = h.get_attribute(attr) or ""
                         except Exception:
                             v = ""
-                        for m in DOWNLOAD_RE.finditer(v):
-                            found_urls.add(m.group(0))
+                        for pattern in (DOWNLOAD_RE, BROAD_DOWNLOAD_RE):
+                            for m in pattern.finditer(v):
+                                found_urls.add(m.group(0))
             except Exception:
                 continue
 
@@ -531,7 +571,25 @@ def get_download_urls_via_playwright(
 
         browser.close()
 
+    # Diagnostic: API URL'lerini kaydet → hangi pattern doğru tespit edilebilir
+    if save_diagnostics and all_api_urls:
+        diag_path = CACHE_DIR / "diagnostic_urls.json"
+        try:
+            CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            diag_data = {
+                "press_url": press_url,
+                "captured_at": datetime.utcnow().isoformat(timespec="seconds"),
+                "all_tuik_urls": sorted(set(all_api_urls)),
+                "matched_download_urls": sorted(found_urls),
+            }
+            diag_path.write_text(json.dumps(diag_data, ensure_ascii=False, indent=2), encoding="utf-8")
+            log(f"Diagnostic kaydedildi: {diag_path} ({len(all_api_urls)} URL)")
+        except Exception as exc:
+            warn(f"Diagnostic kayıt hatası: {exc}")
+
     log(f"Yakalanan download URL sayısı: {len(found_urls)}")
+    if not found_urls and all_api_urls:
+        warn(f"Download URL bulunamadı. Yakalanan {len(all_api_urls)} TÜİK URL'si diagnostic dosyasında.")
     return sorted(found_urls), cookies
 
 

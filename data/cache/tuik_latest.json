@@ -1,4 +1,119 @@
 {
-  "date": "2026-03-17",
-  "items": []
+  "scraped_at": "2026-03-18T16:37:18",
+  "total_sectors": 13,
+  "families": [
+    {
+      "family": "tuik_tufe",
+      "label": "TÜFE Ana Gruplar",
+      "press_id": "58287",
+      "date": "2026-03",
+      "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
+      "sectors": [
+        {
+          "id": "01",
+          "name": "Gıda ve alkolsüz içecekler",
+          "monthly_change": 6.89,
+          "annual_change": 36.44,
+          "twelve_month_avg": 33.6,
+          "level": 1
+        },
+        {
+          "id": "02",
+          "name": "Alkollü içecekler ve tütün",
+          "monthly_change": 3.86,
+          "annual_change": 36.54,
+          "twelve_month_avg": 33.6,
+          "level": 1
+        },
+        {
+          "id": "03",
+          "name": "Giyim ve ayakkabı",
+          "monthly_change": -5.31,
+          "annual_change": 6.79,
+          "twelve_month_avg": 33.6,
+          "level": 1
+        },
+        {
+          "id": "04",
+          "name": "Konut",
+          "monthly_change": 2.4,
+          "annual_change": 42.33,
+          "twelve_month_avg": 33.6,
+          "level": 1
+        },
+        {
+          "id": "05",
+          "name": "Mobilya ve ev eşyası",
+          "monthly_change": 0.9,
+          "annual_change": 22.18,
+          "twelve_month_avg": 33.6,
+          "level": 1
+        },
+        {
+          "id": "06",
+          "name": "Sağlık",
+          "monthly_change": 1.62,
+          "annual_change": 29.26,
+          "twelve_month_avg": 33.6,
+          "level": 1
+        },
+        {
+          "id": "07",
+          "name": "Ulaştırma",
+          "monthly_change": 2.58,
+          "annual_change": 28.86,
+          "twelve_month_avg": 33.6,
+          "level": 1
+        },
+        {
+          "id": "08",
+          "name": "Bilgi ve iletişim",
+          "monthly_change": 3.77,
+          "annual_change": 22.41,
+          "twelve_month_avg": 33.6,
+          "level": 1
+        },
+        {
+          "id": "09",
+          "name": "Eğlence ve kültür",
+          "monthly_change": 0.41,
+          "annual_change": 27.24,
+          "twelve_month_avg": 33.6,
+          "level": 1
+        },
+        {
+          "id": "10",
+          "name": "Eğitim",
+          "monthly_change": 3.97,
+          "annual_change": 55.78,
+          "twelve_month_avg": 33.6,
+          "level": 1
+        },
+        {
+          "id": "11",
+          "name": "Lokanta ve konaklama",
+          "monthly_change": 2.82,
+          "annual_change": 32.93,
+          "twelve_month_avg": 33.6,
+          "level": 1
+        },
+        {
+          "id": "12",
+          "name": "Sigort ve finansal hizmetler",
+          "monthly_change": 28.31,
+          "annual_change": 28.31,
+          "twelve_month_avg": 33.6,
+          "level": 1
+        },
+        {
+          "id": "13",
+          "name": "Çeşitli mal ve hizmetler",
+          "monthly_change": 1.81,
+          "annual_change": 28.02,
+          "twelve_month_avg": 33.6,
+          "level": 1
+        }
+      ]
+    }
+  ]
 }

@@ -18,6 +18,7 @@ Mimari: Excel indirme YOK.
 from __future__ import annotations
 
 import argparse
+import difflib
 import json
 import re
 import sys
@@ -269,11 +270,19 @@ def build_sectors_from_grafiks(grafiks: Dict[str, Dict[str, Any]]) -> List[Secto
             level=1,
         ))
 
-    # monthly_change'i doğru ata
+    # monthly_change'i doğru ata (fuzzy eşleştirme ile TÜİK typo'larına dayanıklı)
     monthly_by_label = {ml.strip().lower(): monthly_vals[j]
                         for j, ml in enumerate(monthly_labels) if j < len(monthly_vals)}
     for s in sectors:
-        mc = monthly_by_label.get(s.name.strip().lower())
+        name_lower = s.name.strip().lower()
+        mc = monthly_by_label.get(name_lower)
+        if mc is None:
+            # TÜİK zaman zaman GRAFIK2 ve GRAFIK4'te farklı yazım kullanıyor
+            # (ör. "Sigort" vs "Sigorta") → difflib ile en yakın eşleşmeyi bul
+            close = difflib.get_close_matches(name_lower, monthly_by_label.keys(), n=1, cutoff=0.85)
+            if close:
+                mc = monthly_by_label[close[0]]
+                log(f"Fuzzy eşleşme: '{s.name}' → '{close[0]}' (aylık)")
         if mc is not None:
             s.monthly_change = mc
 

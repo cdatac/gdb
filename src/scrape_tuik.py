@@ -339,10 +339,14 @@ def discover_latest_press_url(discover_url: str, must_contain: str) -> Optional[
 
 
 def _find_press_link_in_html(html: str, base_url: str, must_contain: str) -> Optional[str]:
-    href_re = re.compile(r'href=["\']([^"\']+/press/\d+/metadata[^"\']*)["\']', re.IGNORECASE)
+    # Match both /press/123/metadata and /press/123 (without /metadata)
+    href_re = re.compile(r'href=["\']([^"\']+/press/\d+(?:/metadata)?[^"\']*)["\']', re.IGNORECASE)
     candidates = []
     for m in href_re.finditer(html):
-        abs_url = urljoin(base_url, unescape(m.group(1)))
+        raw_url = unescape(m.group(1))
+        abs_url = urljoin(base_url, raw_url)
+        # Normalise: ensure /metadata suffix
+        abs_url = re.sub(r'(/press/\d+)(?!/metadata)(/|$)', r'\1/metadata\2', abs_url)
         start = max(0, m.start() - 500)
         end = min(len(html), m.end() + 500)
         context = html[start:end]
@@ -382,11 +386,14 @@ def _discover_with_playwright(discover_url: str, must_contain: str) -> Optional[
                     text = anchor.inner_text(timeout=500)
                     if must_contain.lower() in text.lower():
                         abs_url = urljoin(discover_url, href)
-                        if "/metadata" in abs_url:
-                            pid = press_id_from_url(abs_url)
-                            if pid:
-                                found_url = abs_url
-                                break
+                        # Normalise: ensure /metadata suffix
+                        abs_url = re.sub(
+                            r'(/press/\d+)(?!/metadata)(/|$)', r'\1/metadata\2', abs_url
+                        )
+                        pid = press_id_from_url(abs_url)
+                        if pid:
+                            found_url = abs_url
+                            break
                 except Exception:
                     continue
 

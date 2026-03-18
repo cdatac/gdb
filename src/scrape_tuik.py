@@ -612,7 +612,8 @@ def main(argv=None) -> int:
         family = job.get("family", "unknown")
         label = job.get("label", family)
 
-        press_url = job.get("url") or job.get("fallback_url")
+        # Explicit URL overrides everything; otherwise always try discovery first.
+        press_url: Optional[str] = job.get("url") or None
         discover_url = job.get("discover_url")
 
         if not press_url and discover_url:
@@ -621,6 +622,8 @@ def main(argv=None) -> int:
             if not press_url and job.get("fallback_url"):
                 press_url = job["fallback_url"]
                 warn(f"Keşif başarısız, fallback kullanılıyor: {press_url}")
+        elif not press_url:
+            press_url = job.get("fallback_url") or None
 
         if not press_url:
             log(f"[ATLA] {family}: press URL bulunamadı")

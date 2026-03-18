@@ -1,5 +1,5 @@
 {
-  "scraped_at": "2026-03-18T15:08:54",
+  "scraped_at": "2026-03-18T15:34:46",
   "total_sectors": 0,
   "families": [
     {
@@ -10,7 +10,7 @@
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
       "download_url": null,
       "sectors": [],
-      "error": "Download URL bulunamadı"
+      "error": "Parse edilemeyen içerik (application/javascript)"
     }
   ]
 }

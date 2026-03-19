@@ -19,7 +19,32 @@
         "persistence_score": 26.3
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-      "children": []
+      "children": [
+        {
+          "id": "102",
+          "name": "Ortaöğretim eğitimi (ortaokul ve lise)",
+          "score": 76.8,
+          "color": "#dc2626",
+          "change": 6.39,
+          "reason": "Yıllık: 55.7% | 12-ay ort: 67.7% | Aylık: 6.4%"
+        },
+        {
+          "id": "101",
+          "name": "Okul öncesi ve temel eğitim (ilkokul)",
+          "score": 75.9,
+          "color": "#dc2626",
+          "change": 6.05,
+          "reason": "Yıllık: 52.2% | 12-ay ort: 67.5% | Aylık: 6.0%"
+        },
+        {
+          "id": "104",
+          "name": "Yükseköğretim eğitimi",
+          "score": 64.7,
+          "color": "#f97316",
+          "change": 0.0,
+          "reason": "Yıllık: 64.6% | 12-ay ort: 81.3% | Aylık: 0.0%"
+        }
+      ]
     },
     {
       "id": "01",
@@ -37,7 +62,24 @@
         "persistence_score": 12.4
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-      "children": []
+      "children": [
+        {
+          "id": "011",
+          "name": "Gıda",
+          "score": 69.5,
+          "color": "#f97316",
+          "change": 7.35,
+          "reason": "Yıllık: 36.8% | 12-ay ort: 32.4% | Aylık: 7.3%"
+        },
+        {
+          "id": "012",
+          "name": "Alkolsüz içecekler",
+          "score": 61.0,
+          "color": "#f97316",
+          "change": 2.53,
+          "reason": "Yıllık: 36.6% | 12-ay ort: 37.9% | Aylık: 2.5%"
+        }
+      ]
     },
     {
       "id": "04",
@@ -55,7 +97,40 @@
         "persistence_score": 16.6
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-      "children": []
+      "children": [
+        {
+          "id": "041",
+          "name": "Konut için yapılan gerçek kira ödemeleri",
+          "score": 72.1,
+          "color": "#f97316",
+          "change": 3.46,
+          "reason": "Yıllık: 53.9% | 12-ay ort: 72.8% | Aylık: 3.5%"
+        },
+        {
+          "id": "043",
+          "name": "Konutun bakımı, onarımı ve güvenliği",
+          "score": 64.4,
+          "color": "#f97316",
+          "change": 5.38,
+          "reason": "Yıllık: 33.8% | 12-ay ort: 31.1% | Aylık: 5.4%"
+        },
+        {
+          "id": "044",
+          "name": "Konutla ilgili su temini ve çeşitli hizmetler",
+          "score": 62.5,
+          "color": "#f97316",
+          "change": 2.11,
+          "reason": "Yıllık: 40.6% | 12-ay ort: 56.5% | Aylık: 2.1%"
+        },
+        {
+          "id": "045",
+          "name": "Elektrik, gaz ve diğer yakıtlar",
+          "score": 41.4,
+          "color": "#4ade80",
+          "change": -0.63,
+          "reason": "Yıllık: 28.7% | 12-ay ort: 44.2% | Aylık: -0.6%"
+        }
+      ]
     },
     {
       "id": "02",
@@ -73,7 +148,24 @@
         "persistence_score": 12.4
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-      "children": []
+      "children": [
+        {
+          "id": "023",
+          "name": "Tütün ve tütün ürünleri",
+          "score": 65.5,
+          "color": "#f97316",
+          "change": 3.95,
+          "reason": "Yıllık: 36.0% | 12-ay ort: 31.2% | Aylık: 4.0%"
+        },
+        {
+          "id": "021",
+          "name": "Alkollü içecekler",
+          "score": 54.5,
+          "color": "#facc15",
+          "change": 3.56,
+          "reason": "Yıllık: 28.0% | 12-ay ort: 29.8% | Aylık: 3.6%"
+        }
+      ]
     },
     {
       "id": "12",
@@ -91,7 +183,24 @@
         "persistence_score": 6.5
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-      "children": []
+      "children": [
+        {
+          "id": "122",
+          "name": "Finansal hizmetler",
+          "score": 56.8,
+          "color": "#facc15",
+          "change": 11.06,
+          "reason": "Yıllık: 27.5% | 12-ay ort: 40.5% | Aylık: 11.1%"
+        },
+        {
+          "id": "121",
+          "name": "Sigorta",
+          "score": 37.1,
+          "color": "#4ade80",
+          "change": 3.01,
+          "reason": "Yıllık: 16.0% | 12-ay ort: 34.5% | Aylık: 3.0%"
+        }
+      ]
     },
     {
       "id": "11",
@@ -109,7 +218,24 @@
         "persistence_score": 9.8
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-      "children": []
+      "children": [
+        {
+          "id": "111",
+          "name": "Yiyecek ve içecek sunum hizmetleri",
+          "score": 60.1,
+          "color": "#f97316",
+          "change": 3.28,
+          "reason": "Yıllık: 33.8% | 12-ay ort: 35.8% | Aylık: 3.3%"
+        },
+        {
+          "id": "112",
+          "name": "Konaklama hizmetleri",
+          "score": 51.3,
+          "color": "#facc15",
+          "change": 1.35,
+          "reason": "Yıllık: 31.8% | 12-ay ort: 35.0% | Aylık: 1.4%"
+        }
+      ]
     },
     {
       "id": "07",
@@ -127,7 +253,40 @@
         "persistence_score": 6.9
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-      "children": []
+      "children": [
+        {
+          "id": "073",
+          "name": "Yolcu taşıma hizmetleri",
+          "score": 56.4,
+          "color": "#facc15",
+          "change": 1.43,
+          "reason": "Yıllık: 36.3% | 12-ay ort: 43.7% | Aylık: 1.4%"
+        },
+        {
+          "id": "072",
+          "name": "Kişisel ulaşım araçlarının kullanımı",
+          "score": 54.7,
+          "color": "#facc15",
+          "change": 4.39,
+          "reason": "Yıllık: 26.5% | 12-ay ort: 24.8% | Aylık: 4.4%"
+        },
+        {
+          "id": "071",
+          "name": "Araç satın alımı",
+          "score": 48.3,
+          "color": "#facc15",
+          "change": 2.26,
+          "reason": "Yıllık: 25.8% | 12-ay ort: 21.0% | Aylık: 2.3%"
+        },
+        {
+          "id": "074",
+          "name": "Posta ve mal taşımacılığı hizmetleri",
+          "score": 47.3,
+          "color": "#facc15",
+          "change": 2.65,
+          "reason": "Yıllık: 26.2% | 12-ay ort: 41.6% | Aylık: 2.6%"
+        }
+      ]
     },
     {
       "id": "06",
@@ -145,7 +304,40 @@
         "persistence_score": 7.2
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-      "children": []
+      "children": [
+        {
+          "id": "063",
+          "name": "Yatarak tedavi hizmetleri",
+          "score": 57.2,
+          "color": "#facc15",
+          "change": 2.35,
+          "reason": "Yıllık: 34.4% | 12-ay ort: 39.7% | Aylık: 2.4%"
+        },
+        {
+          "id": "064",
+          "name": "Diğer sağlık hizmetleri",
+          "score": 53.0,
+          "color": "#facc15",
+          "change": 1.75,
+          "reason": "Yıllık: 33.1% | 12-ay ort: 44.2% | Aylık: 1.8%"
+        },
+        {
+          "id": "062",
+          "name": "Ayaktan tedavi hizmetleri",
+          "score": 49.5,
+          "color": "#facc15",
+          "change": 2.05,
+          "reason": "Yıllık: 28.9% | 12-ay ort: 36.4% | Aylık: 2.0%"
+        },
+        {
+          "id": "061",
+          "name": "İlaçlar ve sağlık ürünleri",
+          "score": 43.4,
+          "color": "#4ade80",
+          "change": 0.56,
+          "reason": "Yıllık: 26.6% | 12-ay ort: 23.9% | Aylık: 0.6%"
+        }
+      ]
     },
     {
       "id": "13",
@@ -163,7 +355,40 @@
         "persistence_score": 6.3
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-      "children": []
+      "children": [
+        {
+          "id": "132",
+          "name": "Diğer kişisel eşyalar",
+          "score": 56.0,
+          "color": "#facc15",
+          "change": 2.46,
+          "reason": "Yıllık: 32.2% | 12-ay ort: 28.7% | Aylık: 2.5%"
+        },
+        {
+          "id": "133",
+          "name": "Sosyal koruma",
+          "score": 54.9,
+          "color": "#facc15",
+          "change": 1.93,
+          "reason": "Yıllık: 34.9% | 12-ay ort: 52.7% | Aylık: 1.9%"
+        },
+        {
+          "id": "131",
+          "name": "Kişisel bakım",
+          "score": 46.8,
+          "color": "#facc15",
+          "change": 2.35,
+          "reason": "Yıllık: 25.7% | 12-ay ort: 32.0% | Aylık: 2.4%"
+        },
+        {
+          "id": "139",
+          "name": "Diğer hizmetler",
+          "score": 37.5,
+          "color": "#4ade80",
+          "change": 0.37,
+          "reason": "Yıllık: 23.0% | 12-ay ort: 29.6% | Aylık: 0.4%"
+        }
+      ]
     },
     {
       "id": "08",
@@ -181,7 +406,24 @@
         "persistence_score": 4.1
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-      "children": []
+      "children": [
+        {
+          "id": "083",
+          "name": "Bilgi ve iletişim hizmetleri",
+          "score": 68.0,
+          "color": "#f97316",
+          "change": 8.37,
+          "reason": "Yıllık: 35.0% | 12-ay ort: 26.6% | Aylık: 8.4%"
+        },
+        {
+          "id": "081",
+          "name": "Bilgi ve iletişim ekipmanları",
+          "score": 19.1,
+          "color": "#3b82f6",
+          "change": -1.45,
+          "reason": "Yıllık: 7.2% | 12-ay ort: 8.9% | Aylık: -1.4%"
+        }
+      ]
     },
     {
       "id": "09",
@@ -199,7 +441,56 @@
         "persistence_score": 5.7
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-      "children": []
+      "children": [
+        {
+          "id": "094",
+          "name": "Eğlence ve dinlence hizmetleri",
+          "score": 74.8,
+          "color": "#dc2626",
+          "change": 4.35,
+          "reason": "Yıllık: 47.2% | 12-ay ort: 53.9% | Aylık: 4.3%"
+        },
+        {
+          "id": "096",
+          "name": "Kültürel hizmetler",
+          "score": 38.6,
+          "color": "#4ade80",
+          "change": 1.26,
+          "reason": "Yıllık: 23.1% | 12-ay ort: 42.2% | Aylık: 1.3%"
+        },
+        {
+          "id": "097",
+          "name": "Gazete, kitap ve kırtasiye malzemeleri",
+          "score": 38.4,
+          "color": "#4ade80",
+          "change": 1.03,
+          "reason": "Yıllık: 21.6% | 12-ay ort: 25.0% | Aylık: 1.0%"
+        },
+        {
+          "id": "098",
+          "name": "Paket turlar ve tatiller",
+          "score": 35.6,
+          "color": "#4ade80",
+          "change": -1.51,
+          "reason": "Yıllık: 21.9% | 12-ay ort: 20.7% | Aylık: -1.5%"
+        },
+        {
+          "id": "093",
+          "name": "Bahçe ürünleri ve ev hayvanları",
+          "score": 27.9,
+          "color": "#4ade80",
+          "change": -16.64,
+          "reason": "Yıllık: 13.3% | 12-ay ort: 22.4% | Aylık: -16.6%"
+        },
+        {
+          "id": "092",
+          "name": "Diğer eğlence malları",
+          "score": 27.2,
+          "color": "#3b82f6",
+          "change": 0.84,
+          "reason": "Yıllık: 11.5% | 12-ay ort: 13.3% | Aylık: 0.8%"
+        }
+      ]
     },
     {
       "id": "05",
@@ -217,7 +508,56 @@
         "persistence_score": 4.1
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-      "children": []
+      "children": [
+        {
+          "id": "056",
+          "name": "Rutin ev bakımı için mal ve hizmetler",
+          "score": 46.0,
+          "color": "#facc15",
+          "change": 1.26,
+          "reason": "Yıllık: 27.7% | 12-ay ort: 31.9% | Aylık: 1.3%"
+        },
+        {
+          "id": "055",
+          "name": "Ev ve bahçe alet ve ekipmanları",
+          "score": 42.0,
+          "color": "#4ade80",
+          "change": 2.14,
+          "reason": "Yıllık: 21.7% | 12-ay ort: 25.2% | Aylık: 2.1%"
+        },
+        {
+          "id": "052",
+          "name": "Ev tekstilleri",
+          "score": 39.9,
+          "color": "#4ade80",
+          "change": 2.12,
+          "reason": "Yıllık: 19.7% | 12-ay ort: 23.3% | Aylık: 2.1%"
+        },
+        {
+          "id": "053",
+          "name": "Ev aletleri",
+          "score": 39.1,
+          "color": "#4ade80",
+          "change": 0.79,
+          "reason": "Yıllık: 23.4% | 12-ay ort: 30.7% | Aylık: 0.8%"
+        },
+        {
+          "id": "051",
+          "name": "Mobilya, mefruşat ve halılar",
+          "score": 33.1,
+          "color": "#4ade80",
+          "change": 0.51,
+          "reason": "Yıllık: 18.7% | 12-ay ort: 24.8% | Aylık: 0.5%"
+        },
+        {
+          "id": "054",
+          "name": "Züccaciye, yemek takımı ve ev gereçleri",
+          "score": 28.0,
+          "color": "#4ade80",
+          "change": 0.75,
+          "reason": "Yıllık: 13.2% | 12-ay ort: 19.3% | Aylık: 0.8%"
+        }
+      ]
     },
     {
       "id": "03",
@@ -235,7 +575,24 @@
         "persistence_score": 4.1
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-      "children": []
+      "children": [
+        {
+          "id": "032",
+          "name": "Ayakkabılar",
+          "score": 22.0,
+          "color": "#3b82f6",
+          "change": -2.58,
+          "reason": "Yıllık: 10.0% | 12-ay ort: 8.8% | Aylık: -2.6%"
+        },
+        {
+          "id": "031",
+          "name": "Giyim",
+          "score": 17.9,
+          "color": "#3b82f6",
+          "change": -5.75,
+          "reason": "Yıllık: 6.5% | 12-ay ort: 11.2% | Aylık: -5.8%"
+        }
+      ]
     }
   ]
 }

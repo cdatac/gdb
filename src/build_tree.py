@@ -205,6 +205,26 @@ def build_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
             scores = compute_composite(annual, monthly, avg12)
             score = scores["score"]
 
+            # Alt sektörleri (Düzey 3) skorla
+            children: List[Dict[str, Any]] = []
+            for sub in sector.get("subgroups", []):
+                s_annual = safe_float(sub.get("annual_change"))
+                s_monthly = safe_float(sub.get("monthly_change"))
+                s_avg12 = safe_float(sub.get("twelve_month_avg"))
+                if s_annual == 0.0 and s_monthly == 0.0:
+                    continue
+                s_scores = compute_composite(s_annual, s_monthly, s_avg12)
+                s_score = s_scores["score"]
+                children.append({
+                    "id": sub.get("id", ""),
+                    "name": sub.get("name", ""),
+                    "score": s_score,
+                    "color": score_color(s_score),
+                    "change": round(s_monthly, 2),
+                    "reason": build_reason(s_annual, s_monthly, s_avg12),
+                })
+            children.sort(key=lambda x: x["score"], reverse=True)
+
             groups.append({
                 "id": sector_id,
                 "name": sector.get("name", ""),
@@ -214,7 +234,7 @@ def build_groups(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
                 "reason": build_reason(annual, monthly, avg12),
                 "score_parts": scores,
                 "source_url": family_result.get("source_url", ""),
-                "children": [],
+                "children": children,
             })
 
     groups.sort(key=lambda x: x["score"], reverse=True)

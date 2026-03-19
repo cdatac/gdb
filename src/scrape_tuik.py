@@ -290,6 +290,245 @@ def build_sectors_from_grafiks(grafiks: Dict[str, Dict[str, Any]]) -> List[Secto
 
 
 # ---------------------------------------------------------------------------
+# Alt sektör Excel verisi (Düzey 3 — harcama gruplarına göre endeks)
+# ---------------------------------------------------------------------------
+
+VERI_PORTALI = "https://veriportali.tuik.gov.tr"
+
+# İngilizce ay adı → ay numarası (Excel'deki col 2)
+MONTH_EN: Dict[str, int] = {
+    "january": 1, "february": 2, "march": 3, "april": 4,
+    "may": 5, "june": 6, "july": 7, "august": 8,
+    "september": 9, "october": 10, "november": 11, "december": 12,
+}
+# Cache: önce .xlsx (modern), yoksa .xls (OLE)
+SUBGROUP_CACHE_XLSX = CACHE_DIR / "tuik_subgroups.xlsx"
+SUBGROUP_CACHE_XLS  = CACHE_DIR / "tuik_subgroups.xls"
+
+
+def _open_excel_as_rows(xls_bytes: bytes) -> Optional[Tuple[List[str], List[List[Any]]]]:
+    """
+    Excel baytlarını okuyup (sheet_names, rows_2d) tuple'ı döndür.
+    Önce xlrd (OLE .xls), ardından openpyxl (.xlsx) dener.
+    rows_2d: liste içinde liste, her iç liste bir satırın hücre değerleri.
+    """
+    # OLE .xls magic: D0 CF 11 E0 veya xlsx magic: PK\x03\x04
+    is_xlsx = xls_bytes[:4] == b"PK\x03\x04"
+
+    if not is_xlsx:
+        try:
+            import xlrd  # type: ignore
+            wb = xlrd.open_workbook(file_contents=xls_bytes)
+            result: Dict[str, List[List[Any]]] = {}
+            for sname in wb.sheet_names():
+                sh = wb.sheet_by_name(sname)
+                result[sname] = [sh.row_values(r) for r in range(sh.nrows)]
+            log(f"xlrd ile açıldı: {list(result.keys())}")
+            return (list(result.keys()), result)
+        except Exception as exc:
+            warn(f"xlrd başarısız ({exc}), openpyxl deneniyor...")
+
+    try:
+        import openpyxl  # type: ignore
+        from io import BytesIO
+        wb = openpyxl.load_workbook(BytesIO(xls_bytes), read_only=True, data_only=True)
+        result = {}
+        for sname in wb.sheetnames:
+            sh = wb[sname]
+            result[sname] = [[cell.value for cell in row] for row in sh.iter_rows()]
+        wb.close()
+        log(f"openpyxl ile açıldı: {list(result.keys())}")
+        return (wb.sheetnames, result)
+    except Exception as exc:
+        warn(f"openpyxl de başarısız: {exc}")
+        return None
+
+
+def fetch_subgroup_excel(api_body: Dict[str, Any]) -> Dict[str, List[Dict[str, Any]]]:
+    """
+    Press API body'sindeki statisticalTables listesinden "Harcama gruplarına göre"
+    Excel dosyasını indir, Düzey 3 sheet'ini parse et.
+
+    Döner: {"01": [{id, name, monthly_change, annual_change, twelve_month_avg}, ...], ...}
+    Anahtar: üst sektörün 2 haneli COICOP kodu (3 haneli kodun ilk 2 hanesi).
+    """
+    # --- URL bul ---
+    tables = (
+        api_body.get("data", {}).get("statisticalTables", [])
+        or api_body.get("statisticalTables", [])
+    )
+    target_url: Optional[str] = None
+    for tbl in tables:
+        title = str(tbl.get("title") or tbl.get("name") or "").lower()
+        if "harcama" in title:
+            rel = tbl.get("url", "")
+            if rel:
+                target_url = VERI_PORTALI + rel
+                log(f"Subgroup Excel: {title[:60]}")
+                break
+
+    if not target_url:
+        warn("statisticalTables içinde 'harcama' Excel'i bulunamadı")
+        return {}
+
+    # --- İndir (önce cache dene) ---
+    xls_bytes: Optional[bytes] = None
+    for cache_path in (SUBGROUP_CACHE_XLSX, SUBGROUP_CACHE_XLS):
+        if cache_path.exists():
+            xls_bytes = cache_path.read_bytes()
+            log(f"Subgroup Excel cache'den: {cache_path.name} ({len(xls_bytes)} bayt)")
+            break
+
+    if xls_bytes is None:
+        try:
+            resp = requests.get(target_url, headers=HEADERS, timeout=90)
+            if resp.status_code != 200:
+                warn(f"Subgroup Excel indirilemedi: HTTP {resp.status_code}")
+                return {}
+            xls_bytes = resp.content
+            log(f"Subgroup Excel indirildi: {len(xls_bytes)} bayt")
+            CACHE_DIR.mkdir(parents=True, exist_ok=True)
+            cache_file = SUBGROUP_CACHE_XLSX if xls_bytes[:4] == b"PK\x03\x04" else SUBGROUP_CACHE_XLS
+            cache_file.write_bytes(xls_bytes)
+        except Exception as exc:
+            warn(f"Subgroup Excel indirme hatası: {exc}")
+            return {}
+
+    # --- Excel parse (xlrd veya openpyxl) ---
+    parsed = _open_excel_as_rows(xls_bytes)
+    if parsed is None:
+        warn("Excel dosyası açılamadı")
+        return {}
+    sheet_names, sheet_data = parsed
+
+    # "Düzey 3" sheet'ini bul
+    target_sheet: Optional[str] = None
+    for sname in sheet_names:
+        if "3" in sname:
+            target_sheet = sname
+            break
+    if target_sheet is None:
+        warn(f"Düzey 3 sheet bulunamadı. Mevcut: {sheet_names}")
+        return {}
+
+    rows_2d = sheet_data[target_sheet]
+    nrows = len(rows_2d)
+    ncols = max((len(r) for r in rows_2d), default=0)
+    log(f"Sheet '{target_sheet}': {nrows} satır × {ncols} sütun")
+
+    if nrows < 10 or ncols < 5:
+        warn(f"Sheet beklenenden küçük: {nrows}×{ncols}")
+        return {}
+
+    # Satır 5 (index 4) = COICOP kodları, Satır 6 (index 5) = isimler
+    code_row = rows_2d[4] if nrows > 4 else []
+    name_row = rows_2d[5] if nrows > 5 else []
+
+    def _pad(lst, length):
+        return list(lst) + [None] * max(0, length - len(lst))
+
+    code_row = _pad(code_row, ncols)
+    name_row = _pad(name_row, ncols)
+
+    # Sütun 0 = Yıl, Sütun 1 = Ay, Sütun 2+ = sektörler
+    DATA_COL_START = 2
+
+    col_info: List[Tuple[int, str, str]] = []
+    for ci in range(DATA_COL_START, ncols):
+        raw = code_row[ci]
+        if isinstance(raw, (int, float)) and raw and raw > 0:
+            code = str(int(raw)).zfill(3)
+        elif raw is not None:
+            code = re.sub(r"\.0$", "", str(raw).strip())
+        else:
+            continue
+        name_raw = name_row[ci]
+        name = str(name_raw).strip() if name_raw is not None else ""
+        if re.match(r"^\d{3}$", code) and name and name.lower() not in ("none", ""):
+            col_info.append((ci, code, name))
+
+    if not col_info:
+        warn("3 haneli COICOP kodu bulunamadı")
+        return {}
+    log(f"Düzey 3 sektörler: {len(col_info)}")
+
+    # Veri satırlarını oku (year, month, {col_idx: index_value})
+    # Sütun düzeni: col0=Yıl, col1=Türkçe ay adı, col2=İngilizce ay adı, col3=TÜFE, col4+=alt sektörler
+    data_rows: List[Tuple[int, int, Dict[int, float]]] = []
+    for ri in range(6, nrows):
+        row = _pad(rows_2d[ri], ncols)
+        try:
+            year = int(float(row[0]))  # type: ignore[arg-type]
+        except (ValueError, TypeError):
+            continue
+        if year < 2000:
+            continue
+        # Ay: col2'deki İngilizce ay adını kullan (ASCII güvenli)
+        month_str = str(row[2]).strip().lower() if row[2] is not None else ""
+        month = MONTH_EN.get(month_str)
+        if month is None:
+            continue
+        vals: Dict[int, float] = {}
+        for ci, _, _ in col_info:
+            try:
+                v = float(row[ci])
+                if v > 0:
+                    vals[ci] = v
+            except (ValueError, TypeError):
+                pass
+        if vals:
+            data_rows.append((year, month, vals))
+
+    if len(data_rows) < 14:
+        warn(f"Yeterli satır yok: {len(data_rows)}")
+        return {}
+
+    last = data_rows[-1]
+    prev = data_rows[-2]
+    log(f"Son dönem: {last[0]}-{last[1]:02d}")
+
+    result: Dict[str, List[Dict[str, Any]]] = {}
+
+    for ci, code, name in col_info:
+        v_last = last[2].get(ci)
+        v_prev = prev[2].get(ci)
+
+        # Yıllık değişim için 12 ay önceki değer
+        v_yago = data_rows[-13][2].get(ci) if len(data_rows) >= 13 else None
+
+        if v_last is None or v_prev is None or v_yago is None:
+            continue
+        if v_prev == 0 or v_yago == 0:
+            continue
+
+        monthly_change = round((v_last / v_prev - 1) * 100, 2)
+        annual_change = round((v_last / v_yago - 1) * 100, 2)
+
+        # 12 aylık ortalama yıllık değişim
+        annual_list: List[float] = []
+        n = len(data_rows)
+        for k in range(max(12, n - 12), n):
+            vc = data_rows[k][2].get(ci)
+            vp = data_rows[k - 12][2].get(ci)
+            if vc and vp and vp > 0:
+                annual_list.append((vc / vp - 1) * 100)
+        avg12 = round(sum(annual_list) / len(annual_list), 2) if annual_list else annual_change
+
+        parent = code[:2]  # "011" → "01"
+        result.setdefault(parent, []).append({
+            "id": code,
+            "name": name,
+            "monthly_change": monthly_change,
+            "annual_change": annual_change,
+            "twelve_month_avg": avg12,
+        })
+
+    total = sum(len(v) for v in result.values())
+    log(f"Alt sektörler: {total} adet, {len(result)} ana grup")
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Press API'dan veri çekme
 # ---------------------------------------------------------------------------
 
@@ -388,7 +627,17 @@ def scrape_press_url(family: str, press_url: str) -> ScrapeResult:
         result.error = "Grafiklerden sektör verisi üretilemedi"
         return result
 
-    result.sectors = [asdict(s) for s in sectors]
+    # Alt sektör verilerini ekle (Düzey 3 Excel)
+    subgroup_map = fetch_subgroup_excel(api_body)
+    sector_dicts = [asdict(s) for s in sectors]
+    for sd in sector_dicts:
+        sid = str(sd.get("id", ""))
+        subs = subgroup_map.get(sid, [])
+        sd["subgroups"] = subs
+        if subs:
+            log(f"  {sd['name']} → {len(subs)} alt grup")
+
+    result.sectors = sector_dicts
     return result
 
 

@@ -166,7 +166,7 @@ th,td{
 <div class="wrap">
 
 <h1>Gökdemir Barometresi</h1>
-<div class="sub">Ana sektöre tıklayınca alt sektörler açılır</div>
+<div class="sub">Ana sektöre tıklayınca skor detayları açılır</div>
 
 <div class="meta" id="meta">Yükleniyor...</div>
 
@@ -202,11 +202,11 @@ ve ağırlıklı olarak birleştirilir.
 </p>
 <p>
 Renk skalası:<br>
-0–39 → düşük risk (mavi)<br>
-40–59 → sınırlı risk (yeşil)<br>
-60–79 → artan risk (sarı)<br>
-80–89 → yüksek risk (turuncu)<br>
-90+ → çok yüksek risk (kırmızı)
+0–27 → düşük risk (mavi)<br>
+28–44 → sınırlı risk (yeşil)<br>
+45–59 → artan risk (sarı)<br>
+60–74 → yüksek risk (turuncu)<br>
+75+ → çok yüksek risk (kırmızı)
 </p>
 <p>
 Bu araç doğrudan ihlal tespiti yapmaz; yalnızca fiyat baskısı yoğunluğunu görselleştirir.
@@ -218,10 +218,10 @@ Bu araç doğrudan ihlal tespiti yapmaz; yalnızca fiyat baskısı yoğunluğunu
 <script>
 
 function colorClass(score){
-  if(score >= 90) return "red";
-  if(score >= 80) return "orange";
-  if(score >= 60) return "yellow";
-  if(score >= 40) return "green";
+  if(score >= 75) return "red";
+  if(score >= 60) return "orange";
+  if(score >= 45) return "yellow";
+  if(score >= 28) return "green";
   return "blue";
 }
 
@@ -289,21 +289,49 @@ fetch("data.json")
       const childBox = document.createElement("div");
       childBox.className = "children";
 
-      children.forEach(c => {
-        const row = document.createElement("div");
-        row.className = "child-row";
-        row.innerHTML = `
-          <div>
-            ${c.name}
-            <div class="reason">${c.reason || ""}</div>
-          </div>
-          <div class="track">
-            <div class="fill ${colorClass(c.score)}" style="width:${Math.min(c.score,100)}%"></div>
-          </div>
-          <div>${c.score}</div>
-        `;
-        childBox.appendChild(row);
-      });
+      if(children.length > 0){
+        children.forEach(c => {
+          const row = document.createElement("div");
+          row.className = "child-row";
+          row.innerHTML = `
+            <div>
+              ${c.name}
+              <div class="reason">${c.reason || ""}</div>
+            </div>
+            <div class="track">
+              <div class="fill ${colorClass(c.score)}" style="width:${Math.min(c.score,100)}%"></div>
+            </div>
+            <div>${c.score}</div>
+          `;
+          childBox.appendChild(row);
+        });
+      } else if(g.score_parts){
+        // Alt sektör yoksa skor bileşenlerini göster
+        const parts = g.score_parts;
+        const metrics = [
+          {key:"level_score",      label:"Seviye (×0.60)"},
+          {key:"trend_score",      label:"Trend (×0.15)"},
+          {key:"acceleration_score",label:"İvme (×0.10)"},
+          {key:"persistence_score",label:"Kalıcılık (×0.10)"},
+          {key:"volatility_score", label:"Oynaklık (×0.05)"},
+        ];
+        const detail = document.createElement("div");
+        detail.style.cssText = "padding:10px 0 10px 18px";
+        metrics.forEach(m => {
+          const val = parts[m.key] ?? 0;
+          const row = document.createElement("div");
+          row.className = "child-row";
+          row.innerHTML = `
+            <div style="color:var(--muted);font-size:13px">${m.label}</div>
+            <div class="track">
+              <div class="fill ${colorClass(val)}" style="width:${Math.min(val,100)}%"></div>
+            </div>
+            <div style="font-size:13px">${val}</div>
+          `;
+          detail.appendChild(row);
+        });
+        childBox.appendChild(detail);
+      }
 
       header.onclick = () => childBox.classList.toggle("open");
       wrapper.appendChild(header);

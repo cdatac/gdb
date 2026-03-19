@@ -6,18 +6,22 @@ Giriş:  data/raw/tuik_latest.json   (scrape_tuik.py çıktısı)
 Çıktı:  docs/data.json              (frontend'in okuduğu skor çıktısı)
 
 Her sektör için 5 alt metrik hesaplar:
-  - level_score:        Mevcut fiyat baskısı seviyesi         (ağırlık: 0.40)
-  - trend_score:        Yüksek seviyenin sürekliliği          (ağırlık: 0.25)
-  - acceleration_score: Artışın hızlanıp hızlanmadığı        (ağırlık: 0.15)
-  - volatility_score:   Serinin dalgalanma düzeyi             (ağırlık: 0.10)
+  - level_score:        Mevcut fiyat baskısı seviyesi         (ağırlık: 0.60)
+  - trend_score:        Yüksek seviyenin sürekliliği          (ağırlık: 0.15)
+  - acceleration_score: Artışın hızlanıp hızlanmadığı        (ağırlık: 0.10)
+  - volatility_score:   Serinin dalgalanma düzeyi             (ağırlık: 0.05)
   - persistence_score:  Eşik üstünde kalma yoğunluğu         (ağırlık: 0.10)
 
+Kalibrasyon (Mart 2026 Türkiye bağlamı):
+  MAX_ANNUAL = 45  → bu seviyede level_score = 100
+  PERSISTENCE_THRESHOLD = 25  → eşik üstü sektörler kalıcı baskıda sayılır
+
 Renk skalası:
-  0-39  → mavi    (düşük risk)
-  40-59 → yeşil   (sınırlı risk)
-  60-79 → SARI    (artan risk)  ← 60-80 SARI; yanıltıcı mavi kullanılmaz
-  80-89 → turuncu (yüksek risk)
-  90+   → kırmızı (çok yüksek risk)
+   0-27 → mavi    (düşük risk)
+  28-44 → yeşil   (sınırlı risk)
+  45-59 → sarı    (artan risk)
+  60-74 → turuncu (yüksek risk)
+  75+   → kırmızı (çok yüksek risk)
 """
 
 from __future__ import annotations
@@ -33,7 +37,7 @@ INPUT_JSON = ROOT / "data" / "raw" / "tuik_latest.json"
 CACHE_JSON = ROOT / "data" / "cache" / "tuik_latest.json"
 OUTPUT_JSON = ROOT / "docs" / "data.json"
 
-PERSISTENCE_THRESHOLD = 40.0
+PERSISTENCE_THRESHOLD = 25.0
 
 
 # ---------------------------------------------------------------------------
@@ -53,23 +57,19 @@ def safe_float(v: Any, default: float = 0.0) -> float:
 
 def score_color(score: float) -> str:
     """
-    60-79 bölgesi sarı — dikkat gerektiren bölge.
-    Mavi sadece gerçekten düşük risk için kullanılır.
+    Eşikler Mart 2026 Türkiye enflasyon bağlamına göre kalibre edilmiştir.
+    MAX_ANNUAL=45 ile en yüksek sektörler 75+ bölgesine (kırmızı) ulaşır.
     """
     s = round(score)
-    if s < 40:
-        return "#3b82f6" if s >= 20 else "#93c5fd"
-    if s < 60:
-        return "#4ade80" if s >= 50 else "#86efac"
-    if s < 80:
-        if s < 67:
-            return "#fde68a"
-        if s < 74:
-            return "#facc15"
-        return "#eab308"
-    if s < 90:
-        return "#f97316"
-    return "#dc2626"
+    if s >= 75:
+        return "#dc2626"   # kırmızı — çok yüksek risk
+    if s >= 60:
+        return "#f97316"   # turuncu — yüksek risk
+    if s >= 45:
+        return "#facc15"   # sarı — artan risk
+    if s >= 28:
+        return "#4ade80"   # yeşil — sınırlı risk
+    return "#3b82f6"       # mavi — düşük risk
 
 
 # ---------------------------------------------------------------------------
@@ -79,14 +79,14 @@ def score_color(score: float) -> str:
 def compute_level_score(annual: float, monthly: float, avg12: float) -> float:
     """
     Mutlak seviye riski.
-    MAX_ANNUAL = 80% → 100 puan (Türkiye yüksek enflasyon bağlamında kalibre edilmiş).
+    MAX_ANNUAL = 45% → 100 puan (Mart 2026 Türkiye bağlamı).
+    Not: avg12 burada genel TÜFE ortalaması olduğundan sektör bazında
+    peak hesabına dahil edilmez; trend/persistence skorlarında kullanılır.
     """
-    MAX_ANNUAL = 80.0
-    peak = max(annual, avg12)
-    norm_peak = clamp(peak / MAX_ANNUAL, 0.0, 1.0) * 100
-    norm_min = clamp(min(annual, avg12) / MAX_ANNUAL, 0.0, 1.0) * 100
+    MAX_ANNUAL = 45.0
+    norm_annual = clamp(annual / MAX_ANNUAL, 0.0, 1.0) * 100
     norm_monthly = clamp(monthly / (MAX_ANNUAL / 12), 0.0, 1.0) * 100
-    raw = norm_peak * 0.65 + norm_min * 0.20 + norm_monthly * 0.15
+    raw = norm_annual * 0.85 + norm_monthly * 0.15
     return clamp(raw, 0.0, 100.0)
 
 
@@ -141,7 +141,7 @@ def compute_composite(annual: float, monthly: float, avg12: float) -> Dict[str, 
     perst = compute_persistence_score(annual, avg12)
 
     total = clamp(
-        level * 0.50 + trend * 0.20 + accel * 0.10 + volat * 0.10 + perst * 0.10,
+        level * 0.60 + trend * 0.15 + accel * 0.10 + volat * 0.05 + perst * 0.10,
         0.0, 100.0,
     )
     return {

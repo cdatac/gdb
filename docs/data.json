@@ -6,17 +6,17 @@
     {
       "id": "10",
       "name": "Eğitim",
-      "score": 52.5,
-      "color": "#4ade80",
+      "score": 78.7,
+      "color": "#dc2626",
       "change": 3.97,
       "reason": "Yıllık: 55.8% | 12-ay ort: 33.6% | Aylık: 4.0%",
       "score_parts": {
-        "score": 52.5,
-        "level_score": 62.7,
+        "score": 78.7,
+        "level_score": 100.0,
         "trend_score": 76.6,
         "acceleration_score": 43.5,
         "volatility_score": 4.1,
-        "persistence_score": 11.4
+        "persistence_score": 26.3
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
       "children": []
@@ -24,35 +24,17 @@
     {
       "id": "01",
       "name": "Gıda ve alkolsüz içecekler",
-      "score": 47.5,
-      "color": "#86efac",
+      "score": 68.7,
+      "color": "#f97316",
       "change": 6.89,
       "reason": "Yıllık: 36.4% | 12-ay ort: 33.6% | Aylık: 6.9%",
       "score_parts": {
-        "score": 47.5,
-        "level_score": 53.0,
+        "score": 68.7,
+        "level_score": 83.8,
         "trend_score": 53.4,
         "acceleration_score": 80.0,
         "volatility_score": 23.1,
-        "persistence_score": 0.0
-      },
-      "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
-      "children": []
-    },
-    {
-      "id": "12",
-      "name": "Sigort ve finansal hizmetler",
-      "score": 44.8,
-      "color": "#86efac",
-      "change": 8.02,
-      "reason": "Yıllık: 28.3% | 12-ay ort: 33.6% | Aylık: 8.0%",
-      "score_parts": {
-        "score": 44.8,
-        "level_score": 49.4,
-        "trend_score": 43.7,
-        "acceleration_score": 80.0,
-        "volatility_score": 34.0,
-        "persistence_score": 0.0
+        "persistence_score": 12.4
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
       "children": []
@@ -60,17 +42,17 @@
     {
       "id": "04",
       "name": "Konut",
-      "score": 41.0,
-      "color": "#86efac",
+      "score": 68.7,
+      "color": "#f97316",
       "change": 2.4,
       "reason": "Yıllık: 42.3% | 12-ay ort: 33.6% | Aylık: 2.4%",
       "score_parts": {
-        "score": 41.0,
-        "level_score": 48.2,
+        "score": 68.7,
+        "level_score": 89.6,
         "trend_score": 60.5,
         "acceleration_score": 39.2,
         "volatility_score": 6.8,
-        "persistence_score": 1.7
+        "persistence_score": 16.6
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
       "children": []
@@ -78,35 +60,35 @@
     {
       "id": "02",
       "name": "Alkollü içecekler ve tütün",
-      "score": 40.4,
-      "color": "#86efac",
+      "score": 65.7,
+      "color": "#f97316",
       "change": 3.86,
       "reason": "Yıllık: 36.5% | 12-ay ort: 33.6% | Aylık: 3.9%",
       "score_parts": {
-        "score": 40.4,
-        "level_score": 46.8,
+        "score": 65.7,
+        "level_score": 84.0,
         "trend_score": 53.5,
         "acceleration_score": 57.8,
         "volatility_score": 4.9,
-        "persistence_score": 0.0
+        "persistence_score": 12.4
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
       "children": []
     },
     {
-      "id": "08",
-      "name": "Bilgi ve iletişim",
-      "score": 36.0,
-      "color": "#3b82f6",
-      "change": 3.77,
-      "reason": "Yıllık: 22.4% | 12-ay ort: 33.6% | Aylık: 3.8%",
+      "id": "12",
+      "name": "Sigort ve finansal hizmetler",
+      "score": 61.3,
+      "color": "#f97316",
+      "change": 28.31,
+      "reason": "Yıllık: 28.3% | 12-ay ort: 33.6% | Aylık: 28.3%",
       "score_parts": {
-        "score": 36.0,
-        "level_score": 41.4,
-        "trend_score": 36.6,
-        "acceleration_score": 68.3,
-        "volatility_score": 11.4,
-        "persistence_score": 0.0
+        "score": 61.3,
+        "level_score": 68.5,
+        "trend_score": 43.7,
+        "acceleration_score": 80.0,
+        "volatility_score": 100.0,
+        "persistence_score": 6.5
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
       "children": []
@@ -114,17 +96,17 @@
     {
       "id": "11",
       "name": "Lokanta ve konaklama",
-      "score": 35.9,
-      "color": "#3b82f6",
+      "score": 57.5,
+      "color": "#facc15",
       "change": 2.82,
       "reason": "Yıllık: 32.9% | 12-ay ort: 33.6% | Aylık: 2.8%",
       "score_parts": {
-        "score": 35.9,
-        "level_score": 41.9,
+        "score": 57.5,
+        "level_score": 73.5,
         "trend_score": 49.2,
         "acceleration_score": 50.7,
         "volatility_score": 0.5,
-        "persistence_score": 0.0
+        "persistence_score": 9.8
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
       "children": []
@@ -132,17 +114,17 @@
     {
       "id": "07",
       "name": "Ulaştırma",
-      "score": 34.3,
-      "color": "#3b82f6",
+      "score": 51.5,
+      "color": "#facc15",
       "change": 2.58,
       "reason": "Yıllık: 28.9% | 12-ay ort: 33.6% | Aylık: 2.6%",
       "score_parts": {
-        "score": 34.3,
-        "level_score": 40.3,
+        "score": 51.5,
+        "level_score": 64.8,
         "trend_score": 44.3,
         "acceleration_score": 51.7,
         "volatility_score": 1.1,
-        "persistence_score": 0.0
+        "persistence_score": 6.9
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
       "children": []
@@ -150,17 +132,17 @@
     {
       "id": "06",
       "name": "Sağlık",
-      "score": 32.8,
-      "color": "#3b82f6",
+      "score": 48.9,
+      "color": "#facc15",
       "change": 1.62,
       "reason": "Yıllık: 29.3% | 12-ay ort: 33.6% | Aylık: 1.6%",
       "score_parts": {
-        "score": 32.8,
-        "level_score": 38.3,
+        "score": 48.9,
+        "level_score": 61.7,
         "trend_score": 44.8,
         "acceleration_score": 42.1,
         "volatility_score": 4.9,
-        "persistence_score": 0.0
+        "persistence_score": 7.2
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
       "children": []
@@ -168,17 +150,35 @@
     {
       "id": "13",
       "name": "Çeşitli mal ve hizmetler",
-      "score": 32.7,
-      "color": "#3b82f6",
+      "score": 47.9,
+      "color": "#facc15",
       "change": 1.81,
       "reason": "Yıllık: 28.0% | 12-ay ort: 33.6% | Aylık: 1.8%",
       "score_parts": {
-        "score": 32.7,
-        "level_score": 38.4,
+        "score": 47.9,
+        "level_score": 60.2,
         "trend_score": 43.3,
         "acceleration_score": 45.0,
         "volatility_score": 3.1,
-        "persistence_score": 0.0
+        "persistence_score": 6.3
+      },
+      "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
+      "children": []
+    },
+    {
+      "id": "08",
+      "name": "Bilgi ve iletişim",
+      "score": 47.7,
+      "color": "#facc15",
+      "change": 3.77,
+      "reason": "Yıllık: 22.4% | 12-ay ort: 33.6% | Aylık: 3.8%",
+      "score_parts": {
+        "score": 47.7,
+        "level_score": 57.3,
+        "trend_score": 36.6,
+        "acceleration_score": 68.3,
+        "volatility_score": 11.4,
+        "persistence_score": 4.1
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
       "children": []
@@ -186,17 +186,17 @@
     {
       "id": "09",
       "name": "Eğlence ve kültür",
-      "score": 30.3,
-      "color": "#3b82f6",
+      "score": 42.6,
+      "color": "#4ade80",
       "change": 0.41,
       "reason": "Yıllık: 27.2% | 12-ay ort: 33.6% | Aylık: 0.4%",
       "score_parts": {
-        "score": 30.3,
-        "level_score": 35.0,
+        "score": 42.6,
+        "level_score": 53.1,
         "trend_score": 42.4,
         "acceleration_score": 32.1,
         "volatility_score": 11.2,
-        "persistence_score": 0.0
+        "persistence_score": 5.7
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
       "children": []
@@ -204,17 +204,17 @@
     {
       "id": "05",
       "name": "Mobilya ve ev eşyası",
-      "score": 29.4,
-      "color": "#3b82f6",
+      "score": 37.5,
+      "color": "#4ade80",
       "change": 0.9,
       "reason": "Yıllık: 22.2% | 12-ay ort: 33.6% | Aylık: 0.9%",
       "score_parts": {
-        "score": 29.4,
-        "level_score": 34.9,
+        "score": 37.5,
+        "level_score": 45.5,
         "trend_score": 36.3,
         "acceleration_score": 40.9,
         "volatility_score": 5.7,
-        "persistence_score": 0.0
+        "persistence_score": 4.1
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
       "children": []
@@ -222,17 +222,17 @@
     {
       "id": "03",
       "name": "Giyim ve ayakkabı",
-      "score": 24.0,
+      "score": 14.9,
       "color": "#3b82f6",
       "change": -5.31,
       "reason": "Yıllık: 6.8% | 12-ay ort: 33.6% | Aylık: -5.3%",
       "score_parts": {
-        "score": 24.0,
-        "level_score": 29.0,
+        "score": 14.9,
+        "level_score": 12.8,
         "trend_score": 20.0,
         "acceleration_score": 20.0,
         "volatility_score": 35.3,
-        "persistence_score": 0.0
+        "persistence_score": 4.1
       },
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
       "children": []

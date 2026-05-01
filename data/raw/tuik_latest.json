@@ -1,12 +1,12 @@
 {
-  "scraped_at": "2026-04-30T08:13:28",
+  "scraped_at": "2026-05-01T08:07:30",
   "total_sectors": 13,
   "families": [
     {
       "family": "tuik_tufe",
       "label": "TÜFE Ana Gruplar",
       "press_id": "58287",
-      "date": "2026-04",
+      "date": "2026-05",
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
       "sectors": [
         {

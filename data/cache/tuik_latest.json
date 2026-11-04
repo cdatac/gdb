@@ -1,5 +1,5 @@
 {
-  "scraped_at": "2026-11-03T13:30:05",
+  "scraped_at": "2026-11-04T13:50:04",
   "total_sectors": 13,
   "families": [
     {
@@ -20,16 +20,16 @@
             {
               "id": "011",
               "name": "Gıda",
-              "monthly_change": -0.47,
-              "annual_change": 26.89,
-              "twelve_month_avg": 32.83
+              "monthly_change": 3.6,
+              "annual_change": 27.08,
+              "twelve_month_avg": 32.18
             },
             {
               "id": "012",
               "name": "Alkolsüz içecekler",
-              "monthly_change": 2.25,
-              "annual_change": 34.92,
-              "twelve_month_avg": 36.22
+              "monthly_change": 2.61,
+              "annual_change": 34.57,
+              "twelve_month_avg": 36.09
             }
           ]
         },
@@ -44,16 +44,16 @@
             {
               "id": "021",
               "name": "Alkollü içecekler",
-              "monthly_change": -0.75,
-              "annual_change": 23.98,
-              "twelve_month_avg": 26.28
+              "monthly_change": 0.84,
+              "annual_change": 25.25,
+              "twelve_month_avg": 25.99
             },
             {
               "id": "023",
               "name": "Tütün ve tütün ürünleri",
-              "monthly_change": 1.33,
-              "annual_change": 32.61,
-              "twelve_month_avg": 31.26
+              "monthly_change": 0.0,
+              "annual_change": 29.18,
+              "twelve_month_avg": 31.41
             }
           ]
         },
@@ -68,16 +68,16 @@
             {
               "id": "031",
               "name": "Giyim",
-              "monthly_change": 4.21,
-              "annual_change": 14.9,
-              "twelve_month_avg": 10.74
+              "monthly_change": 13.21,
+              "annual_change": 14.67,
+              "twelve_month_avg": 11.26
             },
             {
               "id": "032",
               "name": "Ayakkabılar",
-              "monthly_change": 2.53,
-              "annual_change": 5.36,
-              "twelve_month_avg": 9.22
+              "monthly_change": 8.56,
+              "annual_change": 5.19,
+              "twelve_month_avg": 9.16
             }
           ]
         },
@@ -92,30 +92,30 @@
             {
               "id": "041",
               "name": "Konut için yapılan gerçek kira ödemeleri",
-              "monthly_change": 3.11,
-              "annual_change": 41.34,
-              "twelve_month_avg": 52.74
+              "monthly_change": 2.55,
+              "annual_change": 39.71,
+              "twelve_month_avg": 50.53
             },
             {
               "id": "043",
               "name": "Konutun bakımı, onarımı ve güvenliği",
-              "monthly_change": 2.02,
-              "annual_change": 43.93,
-              "twelve_month_avg": 37.28
+              "monthly_change": 1.92,
+              "annual_change": 44.63,
+              "twelve_month_avg": 38.44
             },
             {
               "id": "044",
               "name": "Konutla ilgili su temini ve çeşitli hizmetler",
-              "monthly_change": 2.84,
-              "annual_change": 25.54,
-              "twelve_month_avg": 39.28
+              "monthly_change": 1.36,
+              "annual_change": 24.29,
+              "twelve_month_avg": 36.54
             },
             {
               "id": "045",
               "name": "Elektrik, gaz ve diğer yakıtlar",
-              "monthly_change": 2.08,
-              "annual_change": 40.99,
-              "twelve_month_avg": 38.23
+              "monthly_change": 3.94,
+              "annual_change": 44.48,
+              "twelve_month_avg": 39.03
             }
           ]
         },
@@ -130,44 +130,44 @@
             {
               "id": "051",
               "name": "Mobilya, mefruşat ve halılar",
-              "monthly_change": 1.75,
-              "annual_change": 24.58,
-              "twelve_month_avg": 20.91
+              "monthly_change": 0.05,
+              "annual_change": 22.5,
+              "twelve_month_avg": 20.83
             },
             {
               "id": "052",
               "name": "Ev tekstilleri",
-              "monthly_change": 1.19,
-              "annual_change": 16.94,
-              "twelve_month_avg": 19.06
+              "monthly_change": 1.0,
+              "annual_change": 16.26,
+              "twelve_month_avg": 18.46
             },
             {
               "id": "053",
               "name": "Ev aletleri",
-              "monthly_change": 2.79,
-              "annual_change": 23.03,
-              "twelve_month_avg": 23.94
+              "monthly_change": 2.52,
+              "annual_change": 24.61,
+              "twelve_month_avg": 23.22
             },
             {
               "id": "054",
               "name": "Züccaciye, yemek takımı ve ev gereçleri",
-              "monthly_change": 0.71,
-              "annual_change": 15.84,
-              "twelve_month_avg": 15.23
+              "monthly_change": 1.02,
+              "annual_change": 15.68,
+              "twelve_month_avg": 14.9
             },
             {
               "id": "055",
               "name": "Ev ve bahçe alet ve ekipmanları",
-              "monthly_change": 1.69,
-              "annual_change": 20.21,
-              "twelve_month_avg": 20.3
+              "monthly_change": 1.13,
+              "annual_change": 23.21,
+              "twelve_month_avg": 20.46
             },
             {
               "id": "056",
               "name": "Rutin ev bakımı için mal ve hizmetler",
-              "monthly_change": 1.66,
-              "annual_change": 30.61,
-              "twelve_month_avg": 29.4
+              "monthly_change": -0.09,
+              "annual_change": 28.18,
+              "twelve_month_avg": 29.01
             }
           ]
         },
@@ -182,30 +182,30 @@
             {
               "id": "061",
               "name": "İlaçlar ve sağlık ürünleri",
-              "monthly_change": 0.22,
-              "annual_change": 35.68,
-              "twelve_month_avg": 29.29
+              "monthly_change": 0.58,
+              "annual_change": 35.58,
+              "twelve_month_avg": 30.67
             },
             {
               "id": "062",
               "name": "Ayaktan tedavi hizmetleri",
-              "monthly_change": 0.35,
-              "annual_change": 58.23,
-              "twelve_month_avg": 36.29
+              "monthly_change": 0.48,
+              "annual_change": 58.21,
+              "twelve_month_avg": 38.22
             },
             {
               "id": "063",
               "name": "Yatarak tedavi hizmetleri",
-              "monthly_change": 0.49,
-              "annual_change": 34.63,
-              "twelve_month_avg": 34.68
+              "monthly_change": 0.36,
+              "annual_change": 35.28,
+              "twelve_month_avg": 34.62
             },
             {
               "id": "064",
               "name": "Diğer sağlık hizmetleri",
-              "monthly_change": 0.82,
-              "annual_change": 44.62,
-              "twelve_month_avg": 39.25
+              "monthly_change": 0.9,
+              "annual_change": 44.41,
+              "twelve_month_avg": 39.4
             }
           ]
         },
@@ -220,30 +220,30 @@
             {
               "id": "071",
               "name": "Araç satın alımı",
-              "monthly_change": 1.48,
-              "annual_change": 12.41,
-              "twelve_month_avg": 19.54
+              "monthly_change": 0.68,
+              "annual_change": 12.15,
+              "twelve_month_avg": 18.63
             },
             {
               "id": "072",
               "name": "Kişisel ulaşım araçlarının kullanımı",
-              "monthly_change": 7.36,
-              "annual_change": 47.45,
-              "twelve_month_avg": 33.31
+              "monthly_change": 4.58,
+              "annual_change": 53.01,
+              "twelve_month_avg": 35.55
             },
             {
               "id": "073",
               "name": "Yolcu taşıma hizmetleri",
-              "monthly_change": 0.24,
-              "annual_change": 43.79,
-              "twelve_month_avg": 45.54
+              "monthly_change": 0.91,
+              "annual_change": 42.42,
+              "twelve_month_avg": 45.63
             },
             {
               "id": "074",
               "name": "Posta ve mal taşımacılığı hizmetleri",
-              "monthly_change": 1.99,
-              "annual_change": 27.4,
-              "twelve_month_avg": 31.04
+              "monthly_change": 0.75,
+              "annual_change": 28.23,
+              "twelve_month_avg": 30.09
             }
           ]
         },
@@ -258,16 +258,16 @@
             {
               "id": "081",
               "name": "Bilgi ve iletişim ekipmanları",
-              "monthly_change": 3.86,
-              "annual_change": 7.27,
-              "twelve_month_avg": 7.2
+              "monthly_change": 2.18,
+              "annual_change": 10.4,
+              "twelve_month_avg": 7.24
             },
             {
               "id": "083",
               "name": "Bilgi ve iletişim hizmetleri",
-              "monthly_change": 0.99,
-              "annual_change": 43.6,
-              "twelve_month_avg": 35.61
+              "monthly_change": 0.42,
+              "annual_change": 42.41,
+              "twelve_month_avg": 37.12
             }
           ]
         },
@@ -282,44 +282,44 @@
             {
               "id": "092",
               "name": "Diğer eğlence malları",
-              "monthly_change": 1.5,
-              "annual_change": 10.06,
-              "twelve_month_avg": 11.62
+              "monthly_change": 2.53,
+              "annual_change": 12.39,
+              "twelve_month_avg": 11.82
             },
             {
               "id": "093",
               "name": "Bahçe ürünleri ve ev hayvanları",
-              "monthly_change": -5.17,
-              "annual_change": 13.57,
-              "twelve_month_avg": 16.55
+              "monthly_change": -7.1,
+              "annual_change": 15.61,
+              "twelve_month_avg": 15.49
             },
             {
               "id": "094",
               "name": "Eğlence ve dinlence hizmetleri",
-              "monthly_change": 1.66,
-              "annual_change": 31.8,
-              "twelve_month_avg": 41.45
+              "monthly_change": 1.16,
+              "annual_change": 31.04,
+              "twelve_month_avg": 40.05
             },
             {
               "id": "096",
               "name": "Kültürel hizmetler",
-              "monthly_change": -0.33,
-              "annual_change": 17.79,
-              "twelve_month_avg": 25.6
+              "monthly_change": 3.6,
+              "annual_change": 21.45,
+              "twelve_month_avg": 24.0
             },
             {
               "id": "097",
               "name": "Gazete, kitap ve kırtasiye malzemeleri",
-              "monthly_change": 2.05,
-              "annual_change": 21.84,
-              "twelve_month_avg": 22.15
+              "monthly_change": 0.75,
+              "annual_change": 20.94,
+              "twelve_month_avg": 21.93
             },
             {
               "id": "098",
               "name": "Paket turlar ve tatiller",
-              "monthly_change": 1.07,
-              "annual_change": 22.64,
-              "twelve_month_avg": 23.54
+              "monthly_change": -1.34,
+              "annual_change": 17.2,
+              "twelve_month_avg": 22.79
             }
           ]
         },
@@ -334,23 +334,23 @@
             {
               "id": "101",
               "name": "Okul öncesi ve temel eğitim (ilkokul)",
-              "monthly_change": 6.89,
-              "annual_change": 39.04,
-              "twelve_month_avg": 51.73
+              "monthly_change": 0.75,
+              "annual_change": 40.07,
+              "twelve_month_avg": 49.14
             },
             {
               "id": "102",
               "name": "Ortaöğretim eğitimi (ortaokul ve lise)",
-              "monthly_change": 7.88,
+              "monthly_change": 0.0,
               "annual_change": 45.22,
-              "twelve_month_avg": 54.21
+              "twelve_month_avg": 52.1
             },
             {
               "id": "104",
               "name": "Yükseköğretim eğitimi",
-              "monthly_change": 25.79,
+              "monthly_change": 0.0,
               "annual_change": 57.71,
-              "twelve_month_avg": 67.18
+              "twelve_month_avg": 66.61
             }
           ]
         },
@@ -365,16 +365,16 @@
             {
               "id": "111",
               "name": "Yiyecek ve içecek sunum hizmetleri",
-              "monthly_change": 1.6,
-              "annual_change": 30.83,
-              "twelve_month_avg": 33.01
+              "monthly_change": 1.65,
+              "annual_change": 30.77,
+              "twelve_month_avg": 32.76
             },
             {
               "id": "112",
               "name": "Konaklama hizmetleri",
-              "monthly_change": 0.79,
-              "annual_change": 17.58,
-              "twelve_month_avg": 28.96
+              "monthly_change": -3.19,
+              "annual_change": 15.87,
+              "twelve_month_avg": 27.54
             }
           ]
         },
@@ -389,16 +389,16 @@
             {
               "id": "121",
               "name": "Sigorta",
-              "monthly_change": -0.28,
-              "annual_change": 16.85,
-              "twelve_month_avg": 18.64
+              "monthly_change": 1.65,
+              "annual_change": 17.64,
+              "twelve_month_avg": 17.57
             },
             {
               "id": "122",
               "name": "Finansal hizmetler",
-              "monthly_change": 5.53,
+              "monthly_change": 0.0,
               "annual_change": 42.13,
-              "twelve_month_avg": 35.03
+              "twelve_month_avg": 34.85
             }
           ]
         },
@@ -413,30 +413,30 @@
             {
               "id": "131",
               "name": "Kişisel bakım",
-              "monthly_change": 0.37,
-              "annual_change": 18.47,
-              "twelve_month_avg": 25.01
+              "monthly_change": 0.54,
+              "annual_change": 18.77,
+              "twelve_month_avg": 23.99
             },
             {
               "id": "132",
               "name": "Diğer kişisel eşyalar",
-              "monthly_change": 0.64,
-              "annual_change": 19.5,
-              "twelve_month_avg": 26.22
+              "monthly_change": -0.11,
+              "annual_change": 14.91,
+              "twelve_month_avg": 25.09
             },
             {
               "id": "133",
               "name": "Sosyal koruma",
-              "monthly_change": 7.55,
-              "annual_change": 25.49,
-              "twelve_month_avg": 34.72
+              "monthly_change": 0.91,
+              "annual_change": 24.68,
+              "twelve_month_avg": 33.23
             },
             {
               "id": "139",
               "name": "Diğer hizmetler",
-              "monthly_change": 0.72,
-              "annual_change": 35.0,
-              "twelve_month_avg": 26.33
+              "monthly_change": 0.19,
+              "annual_change": 35.2,
+              "twelve_month_avg": 27.42
             }
           ]
         }

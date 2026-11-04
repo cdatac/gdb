@@ -1,7 +1,7 @@
 {
   "title": "Gökdemir Barometresi",
   "subtitle": "En riskli sektörler (TÜİK verisi)",
-  "updated_at": "2026-11-03",
+  "updated_at": "2026-11-04",
   "groups": [
     {
       "id": "10",
@@ -23,26 +23,26 @@
         {
           "id": "104",
           "name": "Yükseköğretim eğitimi",
-          "score": 83.2,
-          "color": "#dc2626",
-          "change": 25.79,
-          "reason": "Yıllık: 57.7% | 12-ay ort: 67.2% | Aylık: 25.8%"
+          "score": 64.7,
+          "color": "#f97316",
+          "change": 0.0,
+          "reason": "Yıllık: 57.7% | 12-ay ort: 66.6% | Aylık: 0.0%"
         },
         {
           "id": "102",
           "name": "Ortaöğretim eğitimi (ortaokul ve lise)",
-          "score": 78.0,
-          "color": "#dc2626",
-          "change": 7.88,
-          "reason": "Yıllık: 45.2% | 12-ay ort: 54.2% | Aylık: 7.9%"
+          "score": 63.1,
+          "color": "#f97316",
+          "change": 0.0,
+          "reason": "Yıllık: 45.2% | 12-ay ort: 52.1% | Aylık: 0.0%"
         },
         {
           "id": "101",
           "name": "Okul öncesi ve temel eğitim (ilkokul)",
-          "score": 69.8,
-          "color": "#f97316",
-          "change": 6.89,
-          "reason": "Yıllık: 39.0% | 12-ay ort: 51.7% | Aylık: 6.9%"
+          "score": 58.6,
+          "color": "#facc15",
+          "change": 0.75,
+          "reason": "Yıllık: 40.1% | 12-ay ort: 49.1% | Aylık: 0.8%"
         }
       ]
     },
@@ -66,18 +66,18 @@
         {
           "id": "012",
           "name": "Alkolsüz içecekler",
-          "score": 58.1,
+          "score": 58.7,
           "color": "#facc15",
-          "change": 2.25,
-          "reason": "Yıllık: 34.9% | 12-ay ort: 36.2% | Aylık: 2.2%"
+          "change": 2.61,
+          "reason": "Yıllık: 34.6% | 12-ay ort: 36.1% | Aylık: 2.6%"
         },
         {
           "id": "011",
           "name": "Gıda",
-          "score": 40.6,
-          "color": "#4ade80",
-          "change": -0.47,
-          "reason": "Yıllık: 26.9% | 12-ay ort: 32.8% | Aylık: -0.5%"
+          "score": 53.1,
+          "color": "#facc15",
+          "change": 3.6,
+          "reason": "Yıllık: 27.1% | 12-ay ort: 32.2% | Aylık: 3.6%"
         }
       ]
     },
@@ -99,36 +99,36 @@
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
       "children": [
         {
+          "id": "045",
+          "name": "Elektrik, gaz ve diğer yakıtlar",
+          "score": 75.3,
+          "color": "#dc2626",
+          "change": 3.94,
+          "reason": "Yıllık: 44.5% | 12-ay ort: 39.0% | Aylık: 3.9%"
+        },
+        {
           "id": "043",
           "name": "Konutun bakımı, onarımı ve güvenliği",
-          "score": 69.2,
+          "score": 69.7,
           "color": "#f97316",
-          "change": 2.02,
-          "reason": "Yıllık: 43.9% | 12-ay ort: 37.3% | Aylık: 2.0%"
+          "change": 1.92,
+          "reason": "Yıllık: 44.6% | 12-ay ort: 38.4% | Aylık: 1.9%"
         },
         {
           "id": "041",
           "name": "Konut için yapılan gerçek kira ödemeleri",
-          "score": 67.1,
+          "score": 63.5,
           "color": "#f97316",
-          "change": 3.11,
-          "reason": "Yıllık: 41.3% | 12-ay ort: 52.7% | Aylık: 3.1%"
-        },
-        {
-          "id": "045",
-          "name": "Elektrik, gaz ve diğer yakıtlar",
-          "score": 65.3,
-          "color": "#f97316",
-          "change": 2.08,
-          "reason": "Yıllık: 41.0% | 12-ay ort: 38.2% | Aylık: 2.1%"
+          "change": 2.55,
+          "reason": "Yıllık: 39.7% | 12-ay ort: 50.5% | Aylık: 2.5%"
         },
         {
           "id": "044",
           "name": "Konutla ilgili su temini ve çeşitli hizmetler",
-          "score": 47.4,
-          "color": "#facc15",
-          "change": 2.84,
-          "reason": "Yıllık: 25.5% | 12-ay ort: 39.3% | Aylık: 2.8%"
+          "score": 41.2,
+          "color": "#4ade80",
+          "change": 1.36,
+          "reason": "Yıllık: 24.3% | 12-ay ort: 36.5% | Aylık: 1.4%"
         }
       ]
     },
@@ -152,18 +152,18 @@
         {
           "id": "023",
           "name": "Tütün ve tütün ürünleri",
-          "score": 52.8,
-          "color": "#facc15",
-          "change": 1.33,
-          "reason": "Yıllık: 32.6% | 12-ay ort: 31.3% | Aylık: 1.3%"
+          "score": 44.2,
+          "color": "#4ade80",
+          "change": 0.0,
+          "reason": "Yıllık: 29.2% | 12-ay ort: 31.4% | Aylık: 0.0%"
         },
         {
           "id": "021",
           "name": "Alkollü içecekler",
-          "score": 37.5,
+          "score": 42.2,
           "color": "#4ade80",
-          "change": -0.75,
-          "reason": "Yıllık: 24.0% | 12-ay ort: 26.3% | Aylık: -0.8%"
+          "change": 0.84,
+          "reason": "Yıllık: 25.2% | 12-ay ort: 26.0% | Aylık: 0.8%"
         }
       ]
     },
@@ -187,18 +187,18 @@
         {
           "id": "122",
           "name": "Finansal hizmetler",
-          "score": 74.8,
-          "color": "#dc2626",
-          "change": 5.53,
-          "reason": "Yıllık: 42.1% | 12-ay ort: 35.0% | Aylık: 5.5%"
+          "score": 61.3,
+          "color": "#f97316",
+          "change": 0.0,
+          "reason": "Yıllık: 42.1% | 12-ay ort: 34.9% | Aylık: 0.0%"
         },
         {
           "id": "121",
           "name": "Sigorta",
-          "score": 30.2,
+          "score": 36.7,
           "color": "#4ade80",
-          "change": -0.28,
-          "reason": "Yıllık: 16.9% | 12-ay ort: 18.6% | Aylık: -0.3%"
+          "change": 1.65,
+          "reason": "Yıllık: 17.6% | 12-ay ort: 17.6% | Aylık: 1.6%"
         }
       ]
     },
@@ -222,18 +222,18 @@
         {
           "id": "111",
           "name": "Yiyecek ve içecek sunum hizmetleri",
-          "score": 51.1,
+          "score": 51.2,
           "color": "#facc15",
-          "change": 1.6,
-          "reason": "Yıllık: 30.8% | 12-ay ort: 33.0% | Aylık: 1.6%"
+          "change": 1.65,
+          "reason": "Yıllık: 30.8% | 12-ay ort: 32.8% | Aylık: 1.6%"
         },
         {
           "id": "112",
           "name": "Konaklama hizmetleri",
-          "score": 32.0,
-          "color": "#4ade80",
-          "change": 0.79,
-          "reason": "Yıllık: 17.6% | 12-ay ort: 29.0% | Aylık: 0.8%"
+          "score": 26.9,
+          "color": "#3b82f6",
+          "change": -3.19,
+          "reason": "Yıllık: 15.9% | 12-ay ort: 27.5% | Aylık: -3.2%"
         }
       ]
     },
@@ -257,34 +257,34 @@
         {
           "id": "072",
           "name": "Kişisel ulaşım araçlarının kullanımı",
-          "score": 81.1,
+          "score": 78.4,
           "color": "#dc2626",
-          "change": 7.36,
-          "reason": "Yıllık: 47.5% | 12-ay ort: 33.3% | Aylık: 7.4%"
+          "change": 4.58,
+          "reason": "Yıllık: 53.0% | 12-ay ort: 35.5% | Aylık: 4.6%"
         },
         {
           "id": "073",
           "name": "Yolcu taşıma hizmetleri",
-          "score": 62.8,
+          "score": 62.7,
           "color": "#f97316",
-          "change": 0.24,
-          "reason": "Yıllık: 43.8% | 12-ay ort: 45.5% | Aylık: 0.2%"
+          "change": 0.91,
+          "reason": "Yıllık: 42.4% | 12-ay ort: 45.6% | Aylık: 0.9%"
         },
         {
           "id": "074",
           "name": "Posta ve mal taşımacılığı hizmetleri",
-          "score": 47.9,
+          "score": 45.4,
           "color": "#facc15",
-          "change": 1.99,
-          "reason": "Yıllık: 27.4% | 12-ay ort: 31.0% | Aylık: 2.0%"
+          "change": 0.75,
+          "reason": "Yıllık: 28.2% | 12-ay ort: 30.1% | Aylık: 0.8%"
         },
         {
           "id": "071",
           "name": "Araç satın alımı",
-          "score": 29.4,
-          "color": "#4ade80",
-          "change": 1.48,
-          "reason": "Yıllık: 12.4% | 12-ay ort: 19.5% | Aylık: 1.5%"
+          "score": 26.5,
+          "color": "#3b82f6",
+          "change": 0.68,
+          "reason": "Yıllık: 12.2% | 12-ay ort: 18.6% | Aylık: 0.7%"
         }
       ]
     },
@@ -310,32 +310,32 @@
           "name": "Ayaktan tedavi hizmetleri",
           "score": 69.6,
           "color": "#f97316",
-          "change": 0.35,
-          "reason": "Yıllık: 58.2% | 12-ay ort: 36.3% | Aylık: 0.3%"
+          "change": 0.48,
+          "reason": "Yıllık: 58.2% | 12-ay ort: 38.2% | Aylık: 0.5%"
         },
         {
           "id": "064",
           "name": "Diğer sağlık hizmetleri",
-          "score": 66.2,
+          "score": 66.1,
           "color": "#f97316",
-          "change": 0.82,
-          "reason": "Yıllık: 44.6% | 12-ay ort: 39.2% | Aylık: 0.8%"
+          "change": 0.9,
+          "reason": "Yıllık: 44.4% | 12-ay ort: 39.4% | Aylık: 0.9%"
         },
         {
           "id": "061",
           "name": "İlaçlar ve sağlık ürünleri",
-          "score": 53.8,
+          "score": 54.6,
           "color": "#facc15",
-          "change": 0.22,
-          "reason": "Yıllık: 35.7% | 12-ay ort: 29.3% | Aylık: 0.2%"
+          "change": 0.58,
+          "reason": "Yıllık: 35.6% | 12-ay ort: 30.7% | Aylık: 0.6%"
         },
         {
           "id": "063",
           "name": "Yatarak tedavi hizmetleri",
-          "score": 52.5,
+          "score": 53.0,
           "color": "#facc15",
-          "change": 0.49,
-          "reason": "Yıllık: 34.6% | 12-ay ort: 34.7% | Aylık: 0.5%"
+          "change": 0.36,
+          "reason": "Yıllık: 35.3% | 12-ay ort: 34.6% | Aylık: 0.4%"
         }
       ]
     },
@@ -359,34 +359,34 @@
         {
           "id": "139",
           "name": "Diğer hizmetler",
-          "score": 54.8,
+          "score": 53.3,
           "color": "#facc15",
-          "change": 0.72,
-          "reason": "Yıllık: 35.0% | 12-ay ort: 26.3% | Aylık: 0.7%"
+          "change": 0.19,
+          "reason": "Yıllık: 35.2% | 12-ay ort: 27.4% | Aylık: 0.2%"
         },
         {
           "id": "133",
           "name": "Sosyal koruma",
-          "score": 53.9,
-          "color": "#facc15",
-          "change": 7.55,
-          "reason": "Yıllık: 25.5% | 12-ay ort: 34.7% | Aylık: 7.5%"
-        },
-        {
-          "id": "132",
-          "name": "Diğer kişisel eşyalar",
-          "score": 34.3,
+          "score": 40.8,
           "color": "#4ade80",
-          "change": 0.64,
-          "reason": "Yıllık: 19.5% | 12-ay ort: 26.2% | Aylık: 0.6%"
+          "change": 0.91,
+          "reason": "Yıllık: 24.7% | 12-ay ort: 33.2% | Aylık: 0.9%"
         },
         {
           "id": "131",
           "name": "Kişisel bakım",
-          "score": 32.4,
+          "score": 33.5,
           "color": "#4ade80",
-          "change": 0.37,
-          "reason": "Yıllık: 18.5% | 12-ay ort: 25.0% | Aylık: 0.4%"
+          "change": 0.54,
+          "reason": "Yıllık: 18.8% | 12-ay ort: 24.0% | Aylık: 0.5%"
+        },
+        {
+          "id": "132",
+          "name": "Diğer kişisel eşyalar",
+          "score": 26.7,
+          "color": "#3b82f6",
+          "change": -0.11,
+          "reason": "Yıllık: 14.9% | 12-ay ort: 25.1% | Aylık: -0.1%"
         }
       ]
     },
@@ -410,18 +410,18 @@
         {
           "id": "083",
           "name": "Bilgi ve iletişim hizmetleri",
-          "score": 65.8,
+          "score": 62.3,
           "color": "#f97316",
-          "change": 0.99,
-          "reason": "Yıllık: 43.6% | 12-ay ort: 35.6% | Aylık: 1.0%"
+          "change": 0.42,
+          "reason": "Yıllık: 42.4% | 12-ay ort: 37.1% | Aylık: 0.4%"
         },
         {
           "id": "081",
           "name": "Bilgi ve iletişim ekipmanları",
-          "score": 33.7,
+          "score": 31.7,
           "color": "#4ade80",
-          "change": 3.86,
-          "reason": "Yıllık: 7.3% | 12-ay ort: 7.2% | Aylık: 3.9%"
+          "change": 2.18,
+          "reason": "Yıllık: 10.4% | 12-ay ort: 7.2% | Aylık: 2.2%"
         }
       ]
     },
@@ -445,50 +445,50 @@
         {
           "id": "094",
           "name": "Eğlence ve dinlence hizmetleri",
-          "score": 51.4,
+          "score": 49.1,
           "color": "#facc15",
-          "change": 1.66,
-          "reason": "Yıllık: 31.8% | 12-ay ort: 41.5% | Aylık: 1.7%"
-        },
-        {
-          "id": "097",
-          "name": "Gazete, kitap ve kırtasiye malzemeleri",
-          "score": 42.4,
-          "color": "#4ade80",
-          "change": 2.05,
-          "reason": "Yıllık: 21.8% | 12-ay ort: 22.1% | Aylık: 2.0%"
-        },
-        {
-          "id": "098",
-          "name": "Paket turlar ve tatiller",
-          "score": 40.0,
-          "color": "#4ade80",
-          "change": 1.07,
-          "reason": "Yıllık: 22.6% | 12-ay ort: 23.5% | Aylık: 1.1%"
+          "change": 1.16,
+          "reason": "Yıllık: 31.0% | 12-ay ort: 40.0% | Aylık: 1.2%"
         },
         {
           "id": "096",
           "name": "Kültürel hizmetler",
-          "score": 30.1,
+          "score": 47.3,
+          "color": "#facc15",
+          "change": 3.6,
+          "reason": "Yıllık: 21.4% | 12-ay ort: 24.0% | Aylık: 3.6%"
+        },
+        {
+          "id": "097",
+          "name": "Gazete, kitap ve kırtasiye malzemeleri",
+          "score": 37.2,
           "color": "#4ade80",
-          "change": -0.33,
-          "reason": "Yıllık: 17.8% | 12-ay ort: 25.6% | Aylık: -0.3%"
+          "change": 0.75,
+          "reason": "Yıllık: 20.9% | 12-ay ort: 21.9% | Aylık: 0.8%"
         },
         {
           "id": "092",
           "name": "Diğer eğlence malları",
-          "score": 28.1,
+          "score": 34.6,
           "color": "#4ade80",
-          "change": 1.5,
-          "reason": "Yıllık: 10.1% | 12-ay ort: 11.6% | Aylık: 1.5%"
+          "change": 2.53,
+          "reason": "Yıllık: 12.4% | 12-ay ort: 11.8% | Aylık: 2.5%"
         },
         {
           "id": "093",
           "name": "Bahçe ürünleri ve ev hayvanları",
-          "score": 26.2,
-          "color": "#3b82f6",
-          "change": -5.17,
-          "reason": "Yıllık: 13.6% | 12-ay ort: 16.6% | Aylık: -5.2%"
+          "score": 29.7,
+          "color": "#4ade80",
+          "change": -7.1,
+          "reason": "Yıllık: 15.6% | 12-ay ort: 15.5% | Aylık: -7.1%"
+        },
+        {
+          "id": "098",
+          "name": "Paket turlar ve tatiller",
+          "score": 29.2,
+          "color": "#4ade80",
+          "change": -1.34,
+          "reason": "Yıllık: 17.2% | 12-ay ort: 22.8% | Aylık: -1.3%"
         }
       ]
     },
@@ -510,52 +510,52 @@
       "source_url": "https://veriportali.tuik.gov.tr/tr/press/58287/metadata",
       "children": [
         {
-          "id": "056",
-          "name": "Rutin ev bakımı için mal ve hizmetler",
-          "score": 51.4,
-          "color": "#facc15",
-          "change": 1.66,
-          "reason": "Yıllık: 30.6% | 12-ay ort: 29.4% | Aylık: 1.7%"
-        },
-        {
           "id": "053",
           "name": "Ev aletleri",
-          "score": 46.2,
+          "score": 47.3,
           "color": "#facc15",
-          "change": 2.79,
-          "reason": "Yıllık: 23.0% | 12-ay ort: 23.9% | Aylık: 2.8%"
+          "change": 2.52,
+          "reason": "Yıllık: 24.6% | 12-ay ort: 23.2% | Aylık: 2.5%"
         },
         {
-          "id": "051",
-          "name": "Mobilya, mefruşat ve halılar",
-          "score": 45.0,
-          "color": "#facc15",
-          "change": 1.75,
-          "reason": "Yıllık: 24.6% | 12-ay ort: 20.9% | Aylık: 1.8%"
+          "id": "056",
+          "name": "Rutin ev bakımı için mal ve hizmetler",
+          "score": 43.1,
+          "color": "#4ade80",
+          "change": -0.09,
+          "reason": "Yıllık: 28.2% | 12-ay ort: 29.0% | Aylık: -0.1%"
         },
         {
           "id": "055",
           "name": "Ev ve bahçe alet ve ekipmanları",
-          "score": 39.5,
+          "score": 41.5,
           "color": "#4ade80",
-          "change": 1.69,
-          "reason": "Yıllık: 20.2% | 12-ay ort: 20.3% | Aylık: 1.7%"
+          "change": 1.13,
+          "reason": "Yıllık: 23.2% | 12-ay ort: 20.5% | Aylık: 1.1%"
+        },
+        {
+          "id": "051",
+          "name": "Mobilya, mefruşat ve halılar",
+          "score": 37.2,
+          "color": "#4ade80",
+          "change": 0.05,
+          "reason": "Yıllık: 22.5% | 12-ay ort: 20.8% | Aylık: 0.1%"
         },
         {
           "id": "052",
           "name": "Ev tekstilleri",
-          "score": 34.0,
+          "score": 32.7,
           "color": "#4ade80",
-          "change": 1.19,
-          "reason": "Yıllık: 16.9% | 12-ay ort: 19.1% | Aylık: 1.2%"
+          "change": 1.0,
+          "reason": "Yıllık: 16.3% | 12-ay ort: 18.5% | Aylık: 1.0%"
         },
         {
           "id": "054",
           "name": "Züccaciye, yemek takımı ve ev gereçleri",
-          "score": 31.9,
+          "score": 32.7,
           "color": "#4ade80",
-          "change": 0.71,
-          "reason": "Yıllık: 15.8% | 12-ay ort: 15.2% | Aylık: 0.7%"
+          "change": 1.02,
+          "reason": "Yıllık: 15.7% | 12-ay ort: 14.9% | Aylık: 1.0%"
         }
       ]
     },
@@ -579,18 +579,18 @@
         {
           "id": "031",
           "name": "Giyim",
-          "score": 42.9,
-          "color": "#4ade80",
-          "change": 4.21,
-          "reason": "Yıllık: 14.9% | 12-ay ort: 10.7% | Aylık: 4.2%"
+          "score": 45.3,
+          "color": "#facc15",
+          "change": 13.21,
+          "reason": "Yıllık: 14.7% | 12-ay ort: 11.3% | Aylık: 13.2%"
         },
         {
           "id": "032",
           "name": "Ayakkabılar",
-          "score": 26.6,
-          "color": "#3b82f6",
-          "change": 2.53,
-          "reason": "Yıllık: 5.4% | 12-ay ort: 9.2% | Aylık: 2.5%"
+          "score": 32.1,
+          "color": "#4ade80",
+          "change": 8.56,
+          "reason": "Yıllık: 5.2% | 12-ay ort: 9.2% | Aylık: 8.6%"
         }
       ]
     }
